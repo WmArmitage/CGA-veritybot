@@ -4,7 +4,7 @@ import sqlite3
 import asyncio
 
 TOKEN = "YOUR_DISCORD_BOT_TOKEN"
-GUILD_ID = YOUR_GUILD_ID  # Replace with your Discord server ID
+GUILD_ID = 1242198415547433030  # Replace with your Discord server ID
 
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
