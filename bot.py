@@ -3,7 +3,9 @@ from discord.ext import commands
 import sqlite3
 import asyncio
 
-TOKEN = "YOUR_DISCORD_BOT_TOKEN"
+import os
+TOKEN = os.getenv("BOT_TOKEN")  # Read from Railway variables
+
 GUILD_ID = 1242198415547433030  # Replace with your Discord server ID
 
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
