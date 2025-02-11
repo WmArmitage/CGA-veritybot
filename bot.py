@@ -4,7 +4,7 @@ import sqlite3
 import asyncio
 
 import os
-TOKEN = os.getenv("BOT_TOKEN")  # Read from Railway variables
+TOKEN = os.getenv("TOKEN")  # Read from Railway variables
 
 GUILD_ID = 1242198415547433030  # Replace with your Discord server ID
 
