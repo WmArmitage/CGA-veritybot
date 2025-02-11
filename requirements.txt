@@ -1,3 +1,4 @@
+python
 discord.py
 sqlite3
 asyncio
