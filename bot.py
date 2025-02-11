@@ -96,3 +96,4 @@ async def recent_verifications(ctx):
     await ctx.send(f"```{response}```")
 
 bot.run(TOKEN)
+#comment to try and fix /bin/bash: line 1: ./bot.py: Permission denied error
