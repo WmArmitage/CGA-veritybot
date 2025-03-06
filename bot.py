@@ -142,7 +142,7 @@ class DeclineReasonModal(discord.ui.Modal):
 
         reason = self.children[0].value
 
-        try:
+        except:
 
             cursor.execute(f"UPDATE role_requests SET decline_reason = '{reason}' WHERE discord_id = {self.user_id} AND role_id = {self.role_id}")
 
