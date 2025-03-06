@@ -1,12 +1,10 @@
 import discord
 from discord.ext import commands
 import sqlite3
-import io
-import os
 import datetime
 
 # Replace with your actual values
-#TOKEN = 'YOUR_BOT_TOKEN' - see line 16
+
 ADMIN_ROLE_ID = 1242292827510276269
 APPROVAL_CHANNEL_ID = 1242300716119494806
 SENATOR_ROLE_ID = 1242296657933107221
