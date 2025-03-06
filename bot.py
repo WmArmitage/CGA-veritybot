@@ -46,7 +46,7 @@ class RoleRequestModal(discord.ui.Modal):
         self.role_name = role_name
         self.add_item(discord.ui.TextInput(label="Why do you want this role?", style=discord.TextStyle.paragraph))
 
-     async def on_submit(self, interaction: discord.Interaction):
+async def on_submit(self, interaction: discord.Interaction):
         reason = self.children[0].value
         user_id = interaction.user.id
         username = interaction.user.name
