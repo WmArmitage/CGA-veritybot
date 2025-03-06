@@ -162,66 +162,53 @@ class DeclineReasonModal(discord.ui.Modal):
 
 
 @bot.command()
-
 async def viewdb(ctx):
-
     admin_role = discord.utils.get(ctx.guild.roles, id=ADMIN_ROLE_ID)
-
     if admin_role not in ctx.author.roles:
-
         await ctx.send("You do not have permission to view the database.")
-
         return
-
-
-
     try:
-
         with open(DATABASE_FILE, 'rb') as f:
-
             await ctx.send(file=discord.File(f, 'role_requests.db'))
-
     except FileNotFoundError:
-
         await ctx.send("Database file not found.")
-
     except Exception as e:
-
         await ctx.send(f"An error occurred: {e}")
 
-
-
 @bot.command()
-
 async def senator(ctx):
-
     await handle_role_request(ctx, SENATOR_ROLE_ID, "Senator")
 
-
-
 @bot.command()
-
 async def representative(ctx):
-
     await handle_role_request(ctx, REPRESENTATIVE_ROLE_ID, "Representative")
 
-
-
 @bot.command()
-
 async def cgastaff(ctx):
-
     await handle_role_request(ctx, CGA_STAFF_ROLE_ID, "CGA Staff")
 
-
-
 @bot.command()
-
 async def pressmedia(ctx):
-
     await handle_role_request(ctx, PRESS_ROLE_ID, "Press Media")
 
+@bot.event
+async def on_member_update(before, after):
+    if before.roles != after.roles:
+        removed_roles = [role for role in before.roles if role not in after.roles]
+        for role in removed_roles:
+            cursor.execute("DELETE FROM role_requests WHERE discord_id = ? AND role_id = ? AND approved = 1", (after.id, role.id))
+            conn.commit()
+            print(f"Removed role {role.name} for user {after.name} from database.")
 
+async def log_audit(guild, user, action):
+    channel = bot.get_channel(AUDIT_LOG_CHANNEL_ID)
+    if channel:
+        embed = discord.Embed(title="Audit Log", description=action, timestamp=datetime.datetime.now())
+        embed.set_author(name=user.name, icon_url=user.avatar.url if user.avatar else "")
+        await channel.send(embed=embed)
 
+class DeclineReasonModal(discord.ui.Modal):
+    def __init__(self, user_id, role_
+                 
 bot.run(TOKEN)
 
