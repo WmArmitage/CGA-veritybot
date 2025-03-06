@@ -25,55 +25,7 @@ intents.members = True
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-Excellent idea! Let's break down the code into segments and explain each part.
 
-Segment 1: Imports, Token, and Basic Setup
-
-Python
-
-import discord
-from discord.ext import commands
-import sqlite3
-import io
-import os
-import datetime
-
-# Replace with your actual values
-TOKEN = 'YOUR_BOT_TOKEN'
-ADMIN_ROLE_ID = 123456789012345678
-APPROVAL_CHANNEL_ID = 987654321098765432
-SENATOR_ROLE_ID = 112233445566778899
-REPRESENTATIVE_ROLE_ID = 998877665544332211
-CGA_STAFF_ROLE_ID = 889900112233445566
-PRESS_ROLE_ID = 776655443322110099
-GUILD_ID = 665544332211009988
-DATABASE_FILE = 'role_requests.db'
-AUDIT_LOG_CHANNEL_ID = 111111111111111111 #replace with audit log channel ID
-
-intents = discord.Intents.default()
-intents.members = True
-intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
-Imports:
-discord: The core Discord.py library.
-commands: Extends Discord.py with command functionality.
-sqlite3: For interacting with the SQLite database.
-io, os: For file handling (database backups).
-datetime: For timestamps in audit logs.
-Token and IDs:
-TOKEN: Your bot's authentication token (replace with your actual token).
-Role IDs: IDs of the roles the bot will manage.
-APPROVAL_CHANNEL_ID: ID of the channel where role requests are displayed.
-GUILD_ID: ID of your Discord server.
-DATABASE_FILE: Name of the SQLite database file.
-AUDIT_LOG_CHANNEL_ID: ID of the channel where audit logs are sent.
-Intents:
-intents: Specifies what events the bot will receive. members and message_content are required for role management and button interactions.
-Bot Initialization:
-bot = commands.Bot(command_prefix='!', intents=intents): Creates a bot instance with the specified command prefix and intents.
-Segment 2: Database Setup
-
-Python
 
 # Database setup
 conn = sqlite3.connect(DATABASE_FILE)
