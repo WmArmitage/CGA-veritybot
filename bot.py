@@ -164,7 +164,7 @@ async def viewdb(ctx):
     if admin_role not in ctx.author.roles:
         await ctx.send("You do not have permission to view the database.")
         return
-    try:
+    except:
         with open(DATABASE_FILE, 'rb') as f:
             await ctx.send(file=discord.File(f, 'role_requests.db'))
     except FileNotFoundError:
