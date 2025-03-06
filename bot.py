@@ -121,7 +121,7 @@ if member and role:
             except Exception as e:
                 await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
         else:
-            await interaction.response.send_message("User or role not found.", ephemeral=True)
+                await interaction.response.send_message("User or role not found.", ephemeral=True)
     elif interaction.data and interaction.data["custom_id"].startswith("decline_"):
         custom_id = interaction.data
         _, user_id, role_id = custom_id.split("_") #from this line down is a guess
