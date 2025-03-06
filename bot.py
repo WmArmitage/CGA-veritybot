@@ -207,8 +207,8 @@ async def log_audit(guild, user, action):
         embed.set_author(name=user.name, icon_url=user.avatar.url if user.avatar else "")
         await channel.send(embed=embed)
 
-class DeclineReasonModal(discord.ui.Modal):
-    def __init__(self, user_id, role_
+#class DeclineReasonModal(discord.ui.Modal):
+    #def __init__(self, user_id, role_
                  
 bot.run(TOKEN)
 
