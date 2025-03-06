@@ -131,7 +131,7 @@ async def on_interaction(interaction: discord.Interaction):
         user_id = int(user_id)
         role_id = int(role_id)
 
-            await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
+        await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
 
   class DeclineReasonModal(discord.ui.Modal):
 
