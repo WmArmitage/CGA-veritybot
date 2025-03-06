@@ -133,16 +133,11 @@ async def on_interaction(interaction: discord.Interaction):
 
         await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
 
-  class DeclineReasonModal(discord.ui.Modal):
-
+class DeclineReasonModal(discord.ui.Modal):
     def __init__(self, user_id, role_id, *args, **kwargs):
-
         super().__init__(*args, **kwargs)
-
         self.user_id = user_id
-
         self.role_id = role_id
-
         self.add_item(discord.ui.TextInput(label="Reason for Decline", style=discord.TextStyle.paragraph))
       
 
