@@ -1,6 +1,8 @@
 import discord
 from discord.ext import commands
 import sqlite3
+import io
+import os
 
 # Replace with your actual values
 #TOKEN = 'YOUR_BOT_TOKEN' - see line 16
@@ -11,8 +13,8 @@ REPRESENTATIVE_ROLE_ID = 1242296757954674758
 CGA_STAFF_ROLE_ID = 1244067941662720061
 PRESS_ROLE_ID = 1242989393049030727
 GUILD_ID = 1242198415547433030
+DATABASE_FILE = 'role_requests.db' #database file name
 
-import os
 TOKEN = os.getenv("TOKEN")  # Read from Railway variables
 
 
@@ -34,9 +36,8 @@ async def on_ready():
 
 async def handle_role_request(ctx, role_id, role_name):
     user_id = ctx.author.id
-    username = ctx.author.name  # Capture username
+    username = ctx.author.name
 
-    # Check if the user already has the role or has requested it.
     cursor.execute("SELECT * FROM role_requests WHERE discord_id = ? AND role_id = ?", (user_id, role_id))
     existing_request = cursor.fetchone()
 
@@ -47,14 +48,12 @@ async def handle_role_request(ctx, role_id, role_name):
             await ctx.send(f"You have already requested the {role_name} role. Please wait for approval.")
         return
 
-    # Store the request in the database.
     cursor.execute("INSERT INTO role_requests (discord_id, username, role_id) VALUES (?, ?, ?)", (user_id, username, role_id))
     conn.commit()
 
-    # Send a message to the approval channel.
     approval_channel = bot.get_channel(APPROVAL_CHANNEL_ID)
     if approval_channel:
-        await approval_channel.send(f"User {ctx.author.mention} requests the {role_name} role. Use `!approve {ctx.author.id} {role_id}` to approve.")
+        await approval_channel.send(f"User {ctx.author.mention} requests the {role_name} role.")
         await ctx.send(f"Your request for the {role_name} role has been submitted for approval.")
     else:
         await ctx.send("Role request submitted. Approval channel not found.")
@@ -77,7 +76,9 @@ async def send_pending_requests_embed(guild):
             embed.add_field(name=username, value=f"Requesting: {role.name}", inline=False)
             view = discord.ui.View()
             approve_button = discord.ui.Button(label="Approve", style=discord.ButtonStyle.success, custom_id=f"approve_{user_id}_{role_id}")
+            decline_button = discord.ui.Button(label="Decline", style=discord.ButtonStyle.danger, custom_id=f"decline_{user_id}_{role_id}")
             view.add_item(approve_button)
+            view.add_item(decline_button)
             approval_channel = bot.get_channel(APPROVAL_CHANNEL_ID)
             await approval_channel.send(embed=embed, view=view)
 
@@ -89,7 +90,65 @@ async def on_interaction(interaction: discord.Interaction):
         user_id = int(user_id)
         role_id = int(role_id)
 
-        # ... (rest of your interaction logic) ...
+        admin_role = discord.utils.get(interaction.guild.roles, id=ADMIN_ROLE_ID)
+        if admin_role not in interaction.user.roles:
+            await interaction.response.send_message("You do not have permission.", ephemeral=True)
+            return
+
+        cursor.execute("SELECT * FROM role_requests WHERE discord_id = ? AND role_id = ? AND approved = 0", (user_id, role_id))
+        request = cursor.fetchone()
+
+        if not request:
+            await interaction.response.send_message("Request not found.", ephemeral=True)
+            return
+
+        guild = bot.get_guild(interaction.guild_id)
+        member = guild.get_member(user_id)
+        role = guild.get_role(role_id)
+
+        if member and role:
+            try:
+                await member.add_roles(role)
+                cursor.execute("UPDATE role_requests SET approved = 1 WHERE discord_id = ? AND role_id = ?", (user_id, role_id))
+                conn.commit()
+                await interaction.response.send_message(f"Approved {member.name}'s request for {role.name}.", ephemeral=True)
+                await send_pending_requests_embed(interaction.guild)
+            except discord.Forbidden:
+                await interaction.response.send_message("No permission to assign role.", ephemeral=True)
+            except Exception as e:
+                await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
+        else:
+            await interaction.response.send_message("User or role not found.", ephemeral=True)
+    elif interaction.data and interaction.data["custom_id"].startswith("decline_"):
+        custom_id = interaction.data["custom_id"]
+        _, user_id, role_id = custom_id.split("_")
+        user_id = int(user_id)
+        role_id = int(role_id)
+
+        admin_role = discord.utils.get(interaction.guild.roles, id=ADMIN_ROLE_ID)
+        if admin_role not in interaction.user.roles:
+            await interaction.response.send_message("You do not have permission.", ephemeral=True)
+            return
+
+        cursor.execute("DELETE FROM role_requests WHERE discord_id = ? AND role_id = ? AND approved = 0", (user_id, role_id))
+        conn.commit()
+        await interaction.response.send_message("Request declined.", ephemeral=True)
+        await send_pending_requests_embed(interaction.guild)
+
+@bot.command()
+async def viewdb(ctx):
+    admin_role = discord.utils.get(ctx.guild.roles, id=ADMIN_ROLE_ID)
+    if admin_role not in ctx.author.roles:
+        await ctx.send("You do not have permission to view the database.")
+        return
+
+    try:
+        with open(DATABASE_FILE, 'rb') as f:
+            await ctx.send(file=discord.File(f, 'role_requests.db'))
+    except FileNotFoundError:
+        await ctx.send("Database file not found.")
+    except Exception as e:
+        await ctx.send(f"An error occurred: {e}")
 
 @bot.command()
 async def senator(ctx):
