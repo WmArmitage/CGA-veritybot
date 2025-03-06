@@ -44,10 +44,9 @@ class RoleRequestModal(discord.ui.Modal):
         super().__init__(*args, **kwargs)
         self.role_id = role_id
         self.role_name = role_name
-
         self.add_item(discord.ui.TextInput(label="Why do you want this role?", style=discord.TextStyle.paragraph))
 
-    async def on_submit(self, interaction: discord.Interaction):
+     async def on_submit(self, interaction: discord.Interaction):
         reason = self.children[0].value
         user_id = interaction.user.id
         username = interaction.user.name
@@ -58,12 +57,11 @@ class RoleRequestModal(discord.ui.Modal):
             await send_pending_requests_embed(interaction.guild)
             await log_audit(interaction.guild, interaction.user, f"Requested role: {self.role_name}, Reason: {reason}")
         except sqlite3.Error as e:
-            await interaction.response.send_message(f"Database error: {e}", ephemeral=True)      
+            await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
 
 
 async def handle_role_request(ctx, role_id, role_name):
     await ctx.interaction.response.send_modal(RoleRequestModal(role_id, role_name, title=f"Request {role_name}"))
-
 
 async def send_pending_requests_embed(guild):
     cursor.execute("SELECT discord_id, username, role_id, request_reason FROM role_requests WHERE approved = 0")
@@ -73,12 +71,11 @@ async def send_pending_requests_embed(guild):
         return
 
     embed = discord.Embed(title="Pending Role Requests", color=0x00ff00)
-
     for user_id, username, role_id, request_reason in requests:
         user = guild.get_member(user_id)
         role = guild.get_role(role_id)
         if user and role:
-            embed.add_field(name=username, value=f"Requesting: {role.name}\nReason: {request_reason}",  inline=False)
+            embed.add_field(name=username, value=f"Requesting: {role.name}\nReason: {request_reason}", inline=False)
             view = discord.ui.View()
             approve_button = discord.ui.Button(label="Approve", style=discord.ButtonStyle.success, custom_id=f"approve_{user_id}_{role_id}")
             decline_button = discord.ui.Button(label="Decline", style=discord.ButtonStyle.danger, custom_id=f"decline_{user_id}_{role_id}")
@@ -111,7 +108,7 @@ async def on_interaction(interaction: discord.Interaction):
         member = guild.get_member(user_id)
         role = guild.get_role(role_id)
 
-        if member and role:
+if member and role:
             try:
                 await member.add_roles(role)
                 cursor.execute("UPDATE role_requests SET approved = 1 WHERE discord_id = ? AND role_id = ?", (user_id, role_id))
@@ -126,8 +123,8 @@ async def on_interaction(interaction: discord.Interaction):
         else:
             await interaction.response.send_message("User or role not found.", ephemeral=True)
     elif interaction.data and interaction.data["custom_id"].startswith("decline_"):
-        custom_id = interaction.data["custom_id"]
-        _, user_id, role_id = custom_id.split("_")
+        custom_id = interaction.data
+        _, user_id, role_id = custom_id.split("_") #from this line down is a guess
         user_id = int(user_id)
         role_id = int(role_id)
 
