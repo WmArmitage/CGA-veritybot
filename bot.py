@@ -118,7 +118,7 @@ async def on_interaction(interaction: discord.Interaction):
                 conn.commit()
                 await interaction.response.send_message(f"Approved {member.name}'s request for {role.name}.", ephemeral=True)
                 await send_pending_requests_embed(interaction.guild)
-              await log_audit(interaction.guild, interaction.user, f"Approved {member.name}'s request for {role.name}.")
+                await log_audit(interaction.guild, interaction.user, f"Approved {member.name}'s request for {role.name}.")
             except discord.Forbidden:
                 await interaction.response.send_message("No permission to assign role.", ephemeral=True)
             except Exception as e:
