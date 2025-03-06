@@ -1,101 +1,110 @@
 import discord
 from discord.ext import commands
 import sqlite3
-import asyncio
+
+# Replace with your actual values
+#TOKEN = 'YOUR_BOT_TOKEN' - see line 16
+ADMIN_ROLE_ID = 1242292827510276269
+APPROVAL_CHANNEL_ID = 1267856155565363383
+SENATOR_ROLE_ID = 1242296657933107221
+REPRESENTATIVE_ROLE_ID = 1242296757954674758
+CGA_STAFF_ROLE_ID = 1244067941662720061
+PRESS_ROLE_ID = 1242989393049030727
+GUILD_ID = 1242198415547433030
 
 import os
 TOKEN = os.getenv("TOKEN")  # Read from Railway variables
 
-GUILD_ID = 1242198415547433030  # Replace with your Discord server ID
 
-bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
+intents = discord.Intents.default()
+intents.members = True
+intents.message_content = True
+bot = commands.Bot(command_prefix='!', intents=intents)
 
-# Database Setup
-conn = sqlite3.connect("verification.db")
-c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS verification (
-                user_id INTEGER PRIMARY KEY,
-                email TEXT,
-                role_requested TEXT,
-                attempts INTEGER DEFAULT 0,
-                verified INTEGER DEFAULT 0
-            )''')
+# Database setup
+conn = sqlite3.connect('role_requests.db')
+cursor = conn.cursor()
+cursor.execute('''CREATE TABLE IF NOT EXISTS role_requests
+                  (discord_id INTEGER PRIMARY KEY, username TEXT, role_id INTEGER, approved INTEGER DEFAULT 0)''')
 conn.commit()
-
-# Role Limits
-ROLE_LIMITS = {
-    "Senator": 36,
-    "Representative": 151
-}
-
-# Function to get role by name
-def get_role(guild, role_name):
-    return discord.utils.get(guild.roles, name=role_name)
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}")
+    print(f'Logged in as {bot.user.name}')
 
-@bot.command()
-async def verify(ctx, email: str, role: str):
-    """Command to verify users with email and assign roles."""
-    if role not in ["Senator", "Representative", "CGA Staff", "Press/Media"]:
-        await ctx.send("Invalid role selection.")
-        return
-    
-    if "@cga.ct.gov" not in email and role in ["Senator", "Representative", "CGA Staff"]:
-        await ctx.send("Invalid email domain. Only @cga.ct.gov emails are allowed for this role.")
-        return
-    
+async def handle_role_request(ctx, role_id, role_name):
     user_id = ctx.author.id
-    c.execute("SELECT attempts, verified FROM verification WHERE user_id = ?", (user_id,))
-    row = c.fetchone()
-    
-    if row:
-        attempts, verified = row
-        if verified:
-            await ctx.send("You are already verified.")
-            return
-        if attempts >= 3:
-            await ctx.send("You have reached the maximum number of attempts. Please contact an admin.")
-            return
-    else:
-        c.execute("INSERT INTO verification (user_id, email, role_requested, attempts) VALUES (?, ?, ?, 1)",
-                  (user_id, email, role))
-    conn.commit()
-    
-    # Simulate Email Verification Process (Future Expansion for OTP System)
-    await asyncio.sleep(5)  # Simulate delay for email verification
-    
-    guild = bot.get_guild(GUILD_ID)
-    role_obj = get_role(guild, role)
-    if role in ROLE_LIMITS and len(role_obj.members) >= ROLE_LIMITS[role]:
-        await ctx.send(f"Role {role} is at maximum capacity ({ROLE_LIMITS[role]}). Contact admin.")
+    username = ctx.author.name  # Capture username
+
+    # Check if the user already has the role or has requested it.
+    cursor.execute("SELECT * FROM role_requests WHERE discord_id = ? AND role_id = ?", (user_id, role_id))
+    existing_request = cursor.fetchone()
+
+    if existing_request:
+        if existing_request[3] == 1:
+            await ctx.send(f"You already have the {role_name} role.")
+        else:
+            await ctx.send(f"You have already requested the {role_name} role. Please wait for approval.")
         return
-    
-    await ctx.author.add_roles(role_obj)
-    c.execute("UPDATE verification SET verified = 1 WHERE user_id = ?", (user_id,))
+
+    # Store the request in the database.
+    cursor.execute("INSERT INTO role_requests (discord_id, username, role_id) VALUES (?, ?, ?)", (user_id, username, role_id))
     conn.commit()
-    await ctx.send(f"{ctx.author.mention}, you have been verified and assigned the role: {role}.")
+
+    # Send a message to the approval channel.
+    approval_channel = bot.get_channel(APPROVAL_CHANNEL_ID)
+    if approval_channel:
+        await approval_channel.send(f"User {ctx.author.mention} requests the {role_name} role. Use `!approve {ctx.author.id} {role_id}` to approve.")
+        await ctx.send(f"Your request for the {role_name} role has been submitted for approval.")
+    else:
+        await ctx.send("Role request submitted. Approval channel not found.")
+
+    await send_pending_requests_embed(ctx.guild)
+
+async def send_pending_requests_embed(guild):
+    cursor.execute("SELECT discord_id, username, role_id FROM role_requests WHERE approved = 0")
+    requests = cursor.fetchall()
+
+    if not requests:
+        return
+
+    embed = discord.Embed(title="Pending Role Requests", color=0x00ff00)
+
+    for user_id, username, role_id in requests:
+        user = guild.get_member(user_id)
+        role = guild.get_role(role_id)
+        if user and role:
+            embed.add_field(name=username, value=f"Requesting: {role.name}", inline=False)
+            view = discord.ui.View()
+            approve_button = discord.ui.Button(label="Approve", style=discord.ButtonStyle.success, custom_id=f"approve_{user_id}_{role_id}")
+            view.add_item(approve_button)
+            approval_channel = bot.get_channel(APPROVAL_CHANNEL_ID)
+            await approval_channel.send(embed=embed, view=view)
+
+@bot.event
+async def on_interaction(interaction: discord.Interaction):
+    if interaction.data and interaction.data["custom_id"].startswith("approve_"):
+        custom_id = interaction.data["custom_id"]
+        _, user_id, role_id = custom_id.split("_")
+        user_id = int(user_id)
+        role_id = int(role_id)
+
+        # ... (rest of your interaction logic) ...
 
 @bot.command()
-@commands.has_role("Administrator")
-async def reset_verification(ctx, member: discord.Member):
-    """Admin command to reset a user's verification attempts."""
-    c.execute("UPDATE verification SET attempts = 0, verified = 0 WHERE user_id = ?", (member.id,))
-    conn.commit()
-    await ctx.send(f"Verification reset for {member.mention}.")
+async def senator(ctx):
+    await handle_role_request(ctx, SENATOR_ROLE_ID, "Senator")
 
 @bot.command()
-@commands.has_role("Administrator")
-async def recent_verifications(ctx):
-    """Admin command to check the last 5 verification attempts."""
-    c.execute("SELECT user_id, email, role_requested, attempts, verified FROM verification ORDER BY user_id DESC LIMIT 5")
-    rows = c.fetchall()
-    response = "Last 5 verification attempts:\n"
-    for row in rows:
-        response += f"User ID: {row[0]}, Email: {row[1]}, Role: {row[2]}, Attempts: {row[3]}, Verified: {row[4]}\n"
-    await ctx.send(f"```{response}```")
+async def representative(ctx):
+    await handle_role_request(ctx, REPRESENTATIVE_ROLE_ID, "Representative")
+
+@bot.command()
+async def cgastaff(ctx):
+    await handle_role_request(ctx, CGA_STAFF_ROLE_ID, "CGA Staff")
+
+@bot.command()
+async def pressmedia(ctx):
+    await handle_role_request(ctx, PRESS_ROLE_ID, "Press Media")
 
 bot.run(TOKEN)
-#comment to try and fix /bin/bash: line 1: ./bot.py: Permission denied error
