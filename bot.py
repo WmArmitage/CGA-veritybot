@@ -3,6 +3,7 @@ from discord.ext import commands
 import sqlite3
 import io
 import os
+import datetime
 
 # Replace with your actual values
 #TOKEN = 'YOUR_BOT_TOKEN' - see line 16
@@ -14,6 +15,7 @@ CGA_STAFF_ROLE_ID = 1244067941662720061
 PRESS_ROLE_ID = 1242989393049030727
 GUILD_ID = 1242198415547433030
 DATABASE_FILE = 'role_requests.db' #database file name
+AUDIT_LOG_CHANNEL_ID = 1347258435452014703
 
 TOKEN = os.getenv("TOKEN")  # Read from Railway variables
 
@@ -23,21 +25,106 @@ intents.members = True
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
+Excellent idea! Let's break down the code into segments and explain each part.
+
+Segment 1: Imports, Token, and Basic Setup
+
+Python
+
+import discord
+from discord.ext import commands
+import sqlite3
+import io
+import os
+import datetime
+
+# Replace with your actual values
+TOKEN = 'YOUR_BOT_TOKEN'
+ADMIN_ROLE_ID = 123456789012345678
+APPROVAL_CHANNEL_ID = 987654321098765432
+SENATOR_ROLE_ID = 112233445566778899
+REPRESENTATIVE_ROLE_ID = 998877665544332211
+CGA_STAFF_ROLE_ID = 889900112233445566
+PRESS_ROLE_ID = 776655443322110099
+GUILD_ID = 665544332211009988
+DATABASE_FILE = 'role_requests.db'
+AUDIT_LOG_CHANNEL_ID = 111111111111111111 #replace with audit log channel ID
+
+intents = discord.Intents.default()
+intents.members = True
+intents.message_content = True
+bot = commands.Bot(command_prefix='!', intents=intents)
+Imports:
+discord: The core Discord.py library.
+commands: Extends Discord.py with command functionality.
+sqlite3: For interacting with the SQLite database.
+io, os: For file handling (database backups).
+datetime: For timestamps in audit logs.
+Token and IDs:
+TOKEN: Your bot's authentication token (replace with your actual token).
+Role IDs: IDs of the roles the bot will manage.
+APPROVAL_CHANNEL_ID: ID of the channel where role requests are displayed.
+GUILD_ID: ID of your Discord server.
+DATABASE_FILE: Name of the SQLite database file.
+AUDIT_LOG_CHANNEL_ID: ID of the channel where audit logs are sent.
+Intents:
+intents: Specifies what events the bot will receive. members and message_content are required for role management and button interactions.
+Bot Initialization:
+bot = commands.Bot(command_prefix='!', intents=intents): Creates a bot instance with the specified command prefix and intents.
+Segment 2: Database Setup
+
+Python
+
 # Database setup
-conn = sqlite3.connect('role_requests.db')
+conn = sqlite3.connect(DATABASE_FILE)
 cursor = conn.cursor()
 cursor.execute('''CREATE TABLE IF NOT EXISTS role_requests
-                  (discord_id INTEGER PRIMARY KEY, username TEXT, role_id INTEGER, approved INTEGER DEFAULT 0)''')
+                  (discord_id INTEGER PRIMARY KEY, username TEXT, role_id INTEGER, approved INTEGER DEFAULT 0, request_reason TEXT, decline_reason TEXT)''')
+cursor.execute("CREATE INDEX IF NOT EXISTS idx_approved ON role_requests (approved)") #database index
 conn.commit()
+
+# new code start
 
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
 
-async def handle_role_request(ctx, role_id, role_name):
-    user_id = ctx.author.id
-    username = ctx.author.name
+class RoleRequestModal(discord.ui.Modal):
+    def __init__(self, role_id, role_name, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.role_id = role_id
+        self.role_name = role_name
 
+        self.add_item(discord.ui.TextInput(label="Why do you want this role?", style=discord.TextStyle.paragraph))
+
+    async def on_submit(self, interaction: discord.Interaction):
+        reason = self.children[0].value
+        user_id = interaction.user.id
+        username = interaction.user.name
+        try:
+            cursor.execute("INSERT INTO role_requests (discord_id, username, role_id, request_reason) VALUES (?, ?, ?, ?)", (user_id, username, self.role_id, reason))
+            conn.commit()
+            await interaction.response.send_message(f"Your request for {self.role_name} has been submitted.", ephemeral=True)
+            await send_pending_requests_embed(interaction.guild)
+            await log_audit(interaction.guild, interaction.user, f"Requested role: {self.role_name}, Reason: {reason}")
+        except sqlite3.Error as e:
+            await interaction.response.send_message(f"Database error: {e}", ephemeral=True)      
+      
+# new code end
+@bot.event
+async def on_ready():
+    print(f'Logged in as {bot.user.name}')
+  
+#commenting out
+#async def handle_role_request(ctx, role_id, role_name):
+    #user_id = ctx.author.id
+    #username = ctx.author.name
+
+#new code start 
+async def handle_role_request(ctx, role_id, role_name):
+    await ctx.interaction.response.send_modal(RoleRequestModal(role_id, role_name, title=f"Request {role_name}"))
+#new code end
+  
     cursor.execute("SELECT * FROM role_requests WHERE discord_id = ? AND role_id = ?", (user_id, role_id))
     existing_request = cursor.fetchone()
 
