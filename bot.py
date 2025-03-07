@@ -86,9 +86,9 @@ async def send_pending_requests_embed(guild):
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
-        if interaction.data and interaction.data["custom_id"].startswith("approve_"): #indented
+  if interaction.data and interaction.data["custom_id"].startswith("approve_"): #indented
         # ... (approve logic - as you have it) ...
-        elif interaction.data and interaction.data["custom_id"].startswith("decline_"): #indented here in relation to line 89
+  elif interaction.data and interaction.data["custom_id"].startswith("decline_"): #indented here in relation to line 89
         custom_id = interaction.data["custom_id"]
         _, user_id, role_id = custom_id.split("_")
         user_id = int(user_id)
