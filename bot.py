@@ -91,6 +91,8 @@ async def on_interaction(interaction: discord.Interaction):
         _, user_id, role_id = custom_id.split("_")
         user_id = int(user_id)
         role_id = int(role_id)
+        await interaction.response.send_modal(DeclineReasonModal(user_id, role_id)) #this should be the only line of code needed
+        #The on_interaction function is completed when the modal on_submit function is called.
 
         admin_role = discord.utils.get(interaction.guild.roles, id=ADMIN_ROLE_ID)
         if admin_role not in interaction.user.roles:
@@ -155,7 +157,7 @@ class DeclineReasonModal(discord.ui.Modal):
 
             await log_audit(interaction.guild, interaction.user, f"Declined request from user ID: {self.user_id}, Role ID: {self.role_id}, Reason: {reason}.")
 
-@bot.command() #still a problem?
+@bot.command() 
 async def viewdb(ctx):
     admin_role = discord.utils.get(ctx.guild.roles, id=ADMIN_ROLE_ID)
     if admin_role not in ctx.author.roles:
