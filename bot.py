@@ -84,7 +84,7 @@ async def send_pending_requests_embed(guild):
             approval_channel = bot.get_channel(APPROVAL_CHANNEL_ID)
             await approval_channel.send(embed=embed, view=view)
 #paste on line 87
-@bot.event
+"""@bot.event
 async def on_interaction(interaction: discord.Interaction):
     if interaction.data and interaction.data["custom_id"].startswith("approve_"):
         custom_id = interaction.data["custom_id"]
@@ -93,7 +93,21 @@ async def on_interaction(interaction: discord.Interaction):
         role_id = int(role_id)
         await interaction.response.send_modal(DeclineReasonModal(user_id, role_id)) #this should be the only line of code needed
         #The on_interaction function is completed when the modal on_submit function is called.
+"""
+#block commenting out above and pasting gemini code again
+@bot.event
+async def on_interaction(interaction: discord.Interaction):
+    if interaction.data and interaction.data["custom_id"].startswith("approve_"):
+        # ... (approve logic - as you have it) ...
+    elif interaction.data and interaction.data["custom_id"].startswith("decline_"):
+        custom_id = interaction.data["custom_id"]
+        _, user_id, role_id = custom_id.split("_")
+        user_id = int(user_id)
+        role_id = int(role_id)
+        await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
+        #The on_interaction function is completed when the modal on_submit function is called.
 
+#end of paste for on interaction code
         admin_role = discord.utils.get(interaction.guild.roles, id=ADMIN_ROLE_ID)
         if admin_role not in interaction.user.roles:
             await interaction.response.send_message("You do not have permission.", ephemeral=True)
