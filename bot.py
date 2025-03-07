@@ -1,6 +1,8 @@
 import discord
 from discord.ext import commands
 import sqlite3
+import io
+import os
 import datetime
 
 # Replace with your actual values
