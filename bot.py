@@ -145,7 +145,7 @@ class DeclineReasonModal(discord.ui.Modal):
             conn.commit()
             await interaction.response.send_message("Request declined.", ephemeral=True)
             await send_pending_requests_embed(interaction.guild)
-            await log_audit(interaction.guild, interaction.user, f"Declined request from user ID: {self
+            await log_audit(interaction.guild, interaction.user, f"Declined request from user ID: {self}
 
 @bot.command() 
 async def viewdb(ctx):
