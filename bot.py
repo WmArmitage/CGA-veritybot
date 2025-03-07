@@ -109,6 +109,7 @@ async def on_interaction(interaction: discord.Interaction):
 """
 #block commented out above @ 12:01 am, going to try combining the two codes below
 
+""" blocking out all code and pating olderversion
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
     if interaction.data and interaction.data["custom_id"].startswith("approve_"):
@@ -123,7 +124,7 @@ await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
 
 
   
-#end of paste for on interaction code
+
         admin_role = discord.utils.get(interaction.guild.roles, id=ADMIN_ROLE_ID)
         if admin_role not in interaction.user.roles:
             await interaction.response.send_message("You do not have permission.", ephemeral=True)
@@ -160,7 +161,7 @@ await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
         user_id = int(user_id)
         role_id = int(role_id)
         await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
-#end paste
+
 
 class DeclineReasonModal(discord.ui.Modal):
     def __init__(self, user_id, role_id, *args, **kwargs):
@@ -178,6 +179,74 @@ class DeclineReasonModal(discord.ui.Modal):
             await interaction.response.send_message("Request declined.", ephemeral=True)
             await send_pending_requests_embed(interaction.guild)
             await log_audit(interaction.guild, interaction.user, f"Declined request from user ID: {self.user_id}, Role ID: {self.role_id}, Reason: {reason}.")
+            
+""" end of bloc comment spanning line 112 to 182
+
+#start of pasting
+@bot.event
+async def on_interaction(interaction: discord.Interaction):
+    if interaction.data and interaction.data["custom_id"].startswith("approve_"):
+        custom_id = interaction.data["custom_id"]
+        _, user_id, role_id = custom_id.split("_")
+        user_id = int(user_id)
+        role_id = int(role_id)
+
+        admin_role = discord.utils.get(interaction.guild.roles, id=ADMIN_ROLE_ID)
+        if admin_role not in interaction.user.roles:
+            await interaction.response.send_message("You do not have permission.", ephemeral=True)
+            return
+
+        cursor.execute("SELECT * FROM role_requests WHERE discord_id = ? AND role_id = ? AND approved = 0", (user_id, role_id))
+        request = cursor.fetchone()
+
+        if not request:
+            await interaction.response.send_message("Request not found.", ephemeral=True)
+            return
+
+        guild = bot.get_guild(interaction.guild_id)
+        member = guild.get_member(user_id)
+        role = guild.get_role(role_id)
+
+        if member and role:
+            try:
+                await member.add_roles(role)
+                cursor.execute("UPDATE role_requests SET approved = 1 WHERE discord_id = ? AND role_id = ?", (user_id, role_id))
+                conn.commit()
+                await interaction.response.send_message(f"Approved {member.name}'s request for {role.name}.", ephemeral=True)
+                await send_pending_requests_embed(interaction.guild)
+                await log_audit(interaction.guild, interaction.user, f"Approved {member.name}'s request for {role.name}.")
+            except discord.Forbidden:
+                await interaction.response.send_message("No permission to assign role.", ephemeral=True)
+            except Exception as e:
+                await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
+        else:
+            await interaction.response.send_message("User or role not found.", ephemeral=True)
+    elif interaction.data and interaction.data["custom_id"].startswith("decline_"):
+        custom_id = interaction.data["custom_id"]
+        _, user_id, role_id = custom_id.split("_")
+        user_id = int(user_id)
+        role_id = int(role_id)
+        await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
+
+class DeclineReasonModal(discord.ui.Modal):
+    def __init__(self, user_id, role_id, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user_id = user_id
+        self.role_id = role_id
+        self.add_item(discord.ui.TextInput(label="Reason for Decline", style=discord.TextStyle.paragraph))
+
+    async def on_submit(self, interaction: discord.Interaction):
+        reason = self.children[0].value
+        try:
+            cursor.execute(f"UPDATE role_requests SET decline_reason = '{reason}' WHERE discord_id = {self.user_id} AND role_id = {self.role_id}")
+            cursor.execute(f"DELETE FROM role_requests WHERE discord_id = {self.user_id} AND role_id = {self.role_id} AND approved = 0")
+            conn.commit()
+            await interaction.response.send_message("Request declined.", ephemeral=True)
+            await send_pending_requests_embed(interaction.guild)
+            await log_audit(interaction.guild, interaction.user, f"Declined request from user ID: {self
+
+
+#end of pasting 
 
 @bot.command() 
 async def viewdb(ctx):
@@ -192,6 +261,8 @@ async def viewdb(ctx):
         await ctx.send("Database file not found.")
     except Exception as e:
         await ctx.send(f"An error occurred: {e}")
+
+#define roles
 
 @bot.command()
 async def senator(ctx):
@@ -209,6 +280,8 @@ async def cgastaff(ctx):
 async def pressmedia(ctx):
     await handle_role_request(ctx, PRESS_ROLE_ID, "Press Media")
 
+
+#this logic handles the code not checking to see if the role has been removed drom Discord, but database did not reflect that so it assumed role was still apllied
 @bot.event
 async def on_member_update(before, after):
     if before.roles != after.roles:
