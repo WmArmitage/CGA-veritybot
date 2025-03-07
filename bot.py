@@ -108,7 +108,7 @@ async def on_interaction(interaction: discord.Interaction):
         member = guild.get_member(user_id)
         role = guild.get_role(role_id)
 
-if member and role:
+        if member and role:
             try:
                 await member.add_roles(role)
                 cursor.execute("UPDATE role_requests SET approved = 1 WHERE discord_id = ? AND role_id = ?", (user_id, role_id))
@@ -120,15 +120,13 @@ if member and role:
                 await interaction.response.send_message("No permission to assign role.", ephemeral=True)
             except Exception as e:
                 await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
-else:
-    await interaction.response.send_message("User or role not found.", ephemeral=True)
-
+        else:
+            await interaction.response.send_message("User or role not found.", ephemeral=True)
     elif interaction.data and interaction.data["custom_id"].startswith("decline_"):
-        custom_id = interaction.data
-        _, user_id, role_id = custom_id.split("_") #from this line down is a guess
+        custom_id = interaction.data["custom_id"]
+        _, user_id, role_id = custom_id.split("_")
         user_id = int(user_id)
         role_id = int(role_id)
-
         await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
 
 class DeclineReasonModal(discord.ui.Modal):
