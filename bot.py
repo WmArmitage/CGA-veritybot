@@ -145,7 +145,9 @@ class DeclineReasonModal(discord.ui.Modal):
             conn.commit()
             await interaction.response.send_message("Request declined.", ephemeral=True)
             await send_pending_requests_embed(interaction.guild)
-            await log_audit(interaction.guild, interaction.user, f"Declined request from user ID: {self}
+            await log_audit(interaction.guild, interaction.user, f"Declined request from user ID: {self.user_id}, Role ID: {self.role_id}, Reason: {reason}.")
+        except sqlite3.Error as e:
+            await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
 
 @bot.command() 
 async def viewdb(ctx):
