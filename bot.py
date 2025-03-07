@@ -145,30 +145,22 @@ async def on_interaction(interaction: discord.Interaction):
         role_id = int(role_id)
         await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
 #end paste
+
 class DeclineReasonModal(discord.ui.Modal):
     def __init__(self, user_id, role_id, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.user_id = user_id
         self.role_id = role_id
         self.add_item(discord.ui.TextInput(label="Reason for Decline", style=discord.TextStyle.paragraph))
-      
 
     async def on_submit(self, interaction: discord.Interaction):
-
         reason = self.children[0].value
-
         try:
-
             cursor.execute(f"UPDATE role_requests SET decline_reason = '{reason}' WHERE discord_id = {self.user_id} AND role_id = {self.role_id}")
-
             cursor.execute(f"DELETE FROM role_requests WHERE discord_id = {self.user_id} AND role_id = {self.role_id} AND approved = 0")
-
             conn.commit()
-
             await interaction.response.send_message("Request declined.", ephemeral=True)
-
             await send_pending_requests_embed(interaction.guild)
-
             await log_audit(interaction.guild, interaction.user, f"Declined request from user ID: {self.user_id}, Role ID: {self.role_id}, Reason: {reason}.")
 
 @bot.command() 
@@ -217,8 +209,7 @@ async def log_audit(guild, user, action):
         embed.set_author(name=user.name, icon_url=user.avatar.url if user.avatar else "")
         await channel.send(embed=embed)
 
-#class DeclineReasonModal(discord.ui.Modal):
-    #def __init__(self, user_id, role_
+
                  
 bot.run(TOKEN)
 
