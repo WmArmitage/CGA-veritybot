@@ -155,8 +155,6 @@ class DeclineReasonModal(discord.ui.Modal):
 
             await log_audit(interaction.guild, interaction.user, f"Declined request from user ID: {self.user_id}, Role ID: {self.role_id}, Reason: {reason}.")
 
-
-
 @bot.command()
 async def viewdb(ctx):
     admin_role = discord.utils.get(ctx.guild.roles, id=ADMIN_ROLE_ID)
