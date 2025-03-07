@@ -111,8 +111,8 @@ async def on_interaction(interaction: discord.Interaction):
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
-if interaction.data and interaction.data["custom_id"].startswith("approve_"):
-elif interaction.data and interaction.data["custom_id"].startswith("decline_"):
+    if interaction.data and interaction.data["custom_id"].startswith("approve_"):
+    elif interaction.data and interaction.data["custom_id"].startswith("decline_"):
         custom_id = interaction.data["custom_id"]
         _, user_id, role_id = custom_id.split("_")
         user_id = int(user_id)
