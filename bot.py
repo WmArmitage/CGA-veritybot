@@ -29,14 +29,32 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 
 # Database setup
+"""
 conn = sqlite3.connect(DATABASE_FILE)
 cursor = conn.cursor()
 cursor.execute('''CREATE TABLE IF NOT EXISTS role_requests
                   (discord_id INTEGER PRIMARY KEY, username TEXT, role_id INTEGER, approved INTEGER DEFAULT 0, request_reason TEXT, decline_reason TEXT)''')
 cursor.execute("CREATE INDEX IF NOT EXISTS idx_approved ON role_requests (approved)") # database index
 conn.commit()
+"""
+conn = sqlite3.connect(DATABASE_FILE)
+cursor = conn.cursor()
+cursor.execute('''CREATE TABLE IF NOT EXISTS role_requests (
+                  discord_id INTEGER,
+                  username TEXT,
+                  role_id INTEGER,
+                  approved INTEGER DEFAULT 0,
+                  request_reason TEXT,
+                  decline_reason TEXT,
+                  PRIMARY KEY (discord_id, role_id))''')
+cursor.execute("CREATE INDEX IF NOT EXISTS idx_approved ON role_requests (approved)")
+conn.commit()
 
 
+
+
+
+#bot code begins here
 
 @bot.event
 async def on_ready():
