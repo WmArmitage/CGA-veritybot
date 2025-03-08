@@ -104,36 +104,56 @@ class RoleRequestModal(discord.ui.Modal):
 
 
 
-async def handle_role_request(interaction: discord.Interaction, role_id, role_name):
-    await interaction.response.send_modal(RoleRequestModal(role_id, role_name, title=f"Request {role_name}"))
-
 async def send_pending_requests_embed(guild):
-    cursor.execute("SELECT discord_id, username, role_id, request_reason FROM role_requests WHERE approved = 0")
-    requests = cursor.fetchall()
+    try:
+        cursor.execute("SELECT discord_id, username, role_id, request_reason FROM role_requests WHERE approved = 0")
+        requests = cursor.fetchall()
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return
 
     if not requests:
+        approval_channel = bot.get_channel(APPROVAL_CHANNEL_ID)
+        if approval_channel:
+            await approval_channel.send("No pending role requests at the moment.")
+        else:
+            print(f"Approval channel with ID {APPROVAL_CHANNEL_ID} not found.")
+        return
+
+    approval_channel = bot.get_channel(APPROVAL_CHANNEL_ID)
+    if not approval_channel:
+        print(f"Approval channel with ID {APPROVAL_CHANNEL_ID} not found.")
         return
 
     embed = discord.Embed(title="Pending Role Requests", color=0x00ff00)
-
-    for user_id, username, role_id, request_reason in requests:
-        user = guild.get_member(user_id)
+    MAX_FIELDS = 25
+    for i, (user_id, username, role_id, request_reason) in enumerate(requests):
+        if i % MAX_FIELDS == 0 and i > 0:
+            await approval_channel.send(embed=embed)
+            embed = discord.Embed(title="Pending Role Requests (continued)", color=0x00ff00)
         role = guild.get_role(role_id)
-        if user and role:
-            embed.add_field(name=username, value=f"Requesting: {role.name}\nReason: {request_reason}", inline=False)
-            view = discord.ui.View()
-            approve_button = discord.ui.Button(label="Approve", style=discord.ButtonStyle.success, custom_id=f"approve_{user_id}_{role_id}")
-            decline_button = discord.ui.Button(label="Decline", style=discord.ButtonStyle.danger, custom_id=f"decline_{user_id}_{role_id}")
-            view.add_item(approve_button)
-            view.add_item(decline_button)
-            approval_channel = bot.get_channel(APPROVAL_CHANNEL_ID)
-            await approval_channel.send(embed=embed, view=view)
+        if not role:
+            print(f"Role with ID {role_id} not found in guild {guild.name}.")
+            continue
+        embed.add_field(name=username, value=f"**Role:** {role.name}\n**Reason:** {request_reason}", inline=False)
+
+    await approval_channel.send(embed=embed)
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
-    if interaction.data and interaction.data["custom_id"].startswith("approve_"):
-        custom_id = interaction.data["custom_id"]
-        _, user_id, role_id = custom_id.split("_")
+    custom_id = interaction.data.get("custom_id", "")
+
+    if not custom_id:
+        await interaction.response.send_message("Interaction has no valid custom ID.", ephemeral=True)
+        return
+
+    if custom_id.startswith("approve_") or custom_id.startswith("decline_"):
+        parts = custom_id.split("_")
+        if len(parts) != 3:
+            await interaction.response.send_message("Invalid interaction format.", ephemeral=True)
+            return
+
+        action, user_id, role_id = parts
         user_id = int(user_id)
         role_id = int(role_id)
 
@@ -142,37 +162,43 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.response.send_message("You do not have permission.", ephemeral=True)
             return
 
-        cursor.execute("SELECT * FROM role_requests WHERE discord_id = ? AND role_id = ? AND approved = 0", (user_id, role_id))
-        request = cursor.fetchone()
-
-        if not request:
-            await interaction.response.send_message("Request not found.", ephemeral=True)
-            return
-
-        guild = bot.get_guild(interaction.guild_id)
+        guild = interaction.guild
         member = guild.get_member(user_id)
         role = guild.get_role(role_id)
 
-        if member and role:
+        if not member:
+            print(f"Member with ID {user_id} not found in guild {guild.name}.")
+            await interaction.response.send_message("User not found.", ephemeral=True)
+            return
+        if not role:
+            print(f"Role with ID {role_id} not found in guild {guild.name}.")
+            await interaction.response.send_message("Role not found.", ephemeral=True)
+            return
+
+        cursor.execute("SELECT approved FROM role_requests WHERE discord_id = ? AND role_id = ?", (user_id, role_id))
+        result = cursor.fetchone()
+
+        if action == "approve":
+            if result and result[0] == 1:
+                await interaction.response.send_message("This request has already been approved.", ephemeral=True)
+                return
+            elif not result:
+                await interaction.response.send_message("No matching request found.", ephemeral=True)
+                return
             try:
                 await member.add_roles(role)
                 cursor.execute("UPDATE role_requests SET approved = 1 WHERE discord_id = ? AND role_id = ?", (user_id, role_id))
                 conn.commit()
-                await interaction.response.send_message(f"Approved {member.name}'s request for {role.name}.", ephemeral=True)
-                await send_pending_requests_embed(interaction.guild)
-                await log_audit(interaction.guild, interaction.user, f"Approved {member.name}'s request for {role.name}.")
+                await interaction.response.send_message(f"Approved {member.name} for {role.name}.", ephemeral=True)
             except discord.Forbidden:
                 await interaction.response.send_message("No permission to assign role.", ephemeral=True)
             except Exception as e:
-                await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
-        else:
-            await interaction.response.send_message("User or role not found.", ephemeral=True)
-    elif interaction.data and interaction.data["custom_id"].startswith("decline_"):
-        custom_id = interaction.data["custom_id"]
-        _, user_id, role_id = custom_id.split("_")
-        user_id = int(user_id)
-        role_id = int(role_id)
-        await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
+                print(f"Unexpected error during role approval: {e}")
+                await interaction.response.send_message("An unexpected error occurred. Please contact an admin.", ephemeral=True)
+
+        elif action == "decline":
+            await interaction.response.defer(ephemeral=True)
+            await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
 
 
 class DeclineReasonModal(discord.ui.Modal):
