@@ -202,6 +202,8 @@ class DeclineReasonModal(discord.ui.Modal):
         self.role_id = role_id
         self.add_item(discord.ui.TextInput(label="Reason for Decline", style=discord.TextStyle.paragraph))
 
+#XXXXXXXXXXXXXXXXXXXXXXX
+"""  
     async def on_submit(self, interaction: discord.Interaction):
         reason = self.children[0].value
         try:
@@ -213,6 +215,22 @@ class DeclineReasonModal(discord.ui.Modal):
             await log_audit(interaction.guild, interaction.user, f"Declined request from user ID: {self.user_id}, Role ID: {self.role_id}, Reason: {reason}.")
         except sqlite3.Error as e:
             await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
+"""
+async def on_submit(self, interaction: discord.Interaction):
+    reason = self.children[0].value
+    try:
+        cursor.execute("UPDATE role_requests SET decline_reason = ? WHERE discord_id = ? AND role_id = ?", (reason, self.user_id, self.role_id))
+        cursor.execute("DELETE FROM role_requests WHERE discord_id = ? AND role_id = ? AND approved = 0", (self.user_id, self.role_id))
+        conn.commit()
+
+        await interaction.response.send_message("Request declined successfully.", ephemeral=True)  # Ensure a response is sent
+        await send_pending_requests_embed(interaction.guild)
+        await log_audit(interaction.guild, interaction.user, f"Declined request from user ID: {self.user_id}, Role ID: {self.role_id}, Reason: {reason}.")
+    except sqlite3.Error as e:
+        await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
+
+
+#XXXXXXXXXXXXXXXXXXXXXX
 
 @bot.command() 
 async def viewdb(interaction: discord.Interaction):
