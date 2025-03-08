@@ -59,32 +59,13 @@ conn.commit()
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(e)
 
-#XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-"""
-class RoleRequestModal(discord.ui.Modal):
-    def __init__(self, role_id, role_name, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.role_id = role_id
-        self.role_name = role_name
-        self.add_item(discord.ui.TextInput(label="Why do you want this role?", style=discord.TextStyle.paragraph))
-
-async def on_submit(self, interaction: discord.Interaction):
-        reason = self.children[0].value
-        user_id = interaction.user.id
-        username = interaction.user.name
-        try:
-            cursor.execute("INSERT INTO role_requests (discord_id, username, role_id, request_reason) VALUES (?, ?, ?, ?)", (user_id, username, self.role_id, reason))
-            conn.commit()
-            await interaction.response.send_message(f"Your request for {self.role_name} has been submitted.", ephemeral=True)
-            await send_pending_requests_embed(interaction.guild)
-            await log_audit(interaction.guild, interaction.user, f"Requested role: {self.role_name}, Reason: {reason}")
-        except sqlite3.Error as e:
-            await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
-"""
-
-#trying copilot's suggestion of having the onsubmit be inside the class and including improved error logging
 
 class RoleRequestModal(discord.ui.Modal):
     def __init__(self, role_id, role_name, *args, **kwargs):
@@ -122,8 +103,6 @@ class RoleRequestModal(discord.ui.Modal):
 
 
 
-
-#XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 async def handle_role_request(interaction: discord.Interaction, role_id, role_name):
     await interaction.response.send_modal(RoleRequestModal(role_id, role_name, title=f"Request {role_name}"))
@@ -195,28 +174,7 @@ async def on_interaction(interaction: discord.Interaction):
         role_id = int(role_id)
         await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
 
-#XXXXXXXXXXXXXXXXXXXXXXX
-"""
-class DeclineReasonModal(discord.ui.Modal):
-    def __init__(self, user_id, role_id, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.user_id = user_id
-        self.role_id = role_id
-        self.add_item(discord.ui.TextInput(label="Reason for Decline", style=discord.TextStyle.paragraph))
 
-async def on_submit(self, interaction: discord.Interaction):
-    reason = self.children[0].value
-    try:
-        cursor.execute("UPDATE role_requests SET decline_reason = ? WHERE discord_id = ? AND role_id = ?", (reason, self.user_id, self.role_id))
-        cursor.execute("DELETE FROM role_requests WHERE discord_id = ? AND role_id = ? AND approved = 0", (self.user_id, self.role_id))
-        conn.commit()
-
-        await interaction.response.send_message("Request declined successfully.", ephemeral=True)  # Ensure a response is sent
-        await send_pending_requests_embed(interaction.guild)
-        await log_audit(interaction.guild, interaction.user, f"Declined request from user ID: {self.user_id}, Role ID: {self.role_id}, Reason: {reason}.")
-    except sqlite3.Error as e:
-        await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
-"""
 class DeclineReasonModal(discord.ui.Modal):
     def __init__(self, user_id, role_id, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -250,8 +208,6 @@ class DeclineReasonModal(discord.ui.Modal):
         except sqlite3.Error as e:
             await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
 
-
-#XXXXXXXXXXXXXXXXXXXXXX
 
 @bot.command() 
 async def viewdb(interaction: discord.Interaction):
@@ -288,14 +244,7 @@ async def cgastaff(interaction: discord.Interaction):
 async def handle_role_request(interaction: discord.Interaction, role_id, role_name):
     await interaction.response.send_modal(RoleRequestModal(role_id, role_name, title=f"Request {role_name}"))
 
-@bot.event
-async def on_ready():
-    print(f'Logged in as {bot.user.name}')
-    try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} command(s)")
-    except Exception as e:
-        print(e)
+
 
                  
 bot.run(TOKEN)
