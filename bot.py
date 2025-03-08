@@ -1,5 +1,5 @@
 import discord
-#from discord.ext import commands
+from discord.ext import commands
 from discord import app_commands
 import sqlite3
 import io
