@@ -1,5 +1,6 @@
 import discord
-from discord.ext import commands
+#from discord.ext import commands
+from discord import app_commands
 import sqlite3
 import io
 import os
@@ -62,8 +63,8 @@ async def on_submit(self, interaction: discord.Interaction):
             await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
 
 
-async def handle_role_request(ctx, role_id, role_name):
-    await ctx.interaction.response.send_modal(RoleRequestModal(role_id, role_name, title=f"Request {role_name}"))
+async def handle_role_request(interaction: discord.Interaction, role_id, role_name):
+    await interaction.response.send_modal(RoleRequestModal(role_id, role_name, title=f"Request {role_name}"))
 
 async def send_pending_requests_embed(guild):
     cursor.execute("SELECT discord_id, username, role_id, request_reason FROM role_requests WHERE approved = 0")
@@ -152,55 +153,48 @@ class DeclineReasonModal(discord.ui.Modal):
             await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
 
 @bot.command() 
-async def viewdb(ctx):
-    admin_role = discord.utils.get(ctx.guild.roles, id=ADMIN_ROLE_ID)
-    if admin_role not in ctx.author.roles:
-        await ctx.send("You do not have permission to view the database.")
+async def viewdb(interaction: discord.Interaction):
+    admin_role = discord.utils.get(interaction: discord.Interaction.guild.roles, id=ADMIN_ROLE_ID)
+    if admin_role not in interaction: discord.Interaction.author.roles:
+        await interaction: discord.Interaction.send("You do not have permission to view the database.")
         return
     try:
         with open(DATABASE_FILE, 'rb') as f:
-            await ctx.send(file=discord.File(f, 'role_requests.db'))
+            await interaction: discord.Interaction.send(file=discord.File(f, 'role_requests.db'))
     except FileNotFoundError:
-        await ctx.send("Database file not found.")
+        await interaction: discord.Interaction.send("Database file not found.")
     except Exception as e:
-        await ctx.send(f"An error occurred: {e}")
+        await interaction: discord.Interaction.send(f"An error occurred: {e}")
 
 #define roles
 
-@bot.command()
-async def senator(ctx):
-    await handle_role_request(ctx, SENATOR_ROLE_ID, "Senator")
+@bot.tree.command(name="pressmedia", description="Request the Press Media role")
+async def pressmedia(interaction: discord.Interaction):
+    await handle_role_request(interaction, PRESS_ROLE_ID, "Press Media")
 
-@bot.command()
-async def representative(ctx):
-    await handle_role_request(ctx, REPRESENTATIVE_ROLE_ID, "Representative")
+@bot.tree.command(name="senator", description="Request the Senator role")
+async def senator(interaction: discord.Interaction):
+    await handle_role_request(interaction, SENATOR_ROLE_ID, "Senator")
 
-@bot.command()
-async def cgastaff(ctx):
-    await handle_role_request(ctx, CGA_STAFF_ROLE_ID, "CGA Staff")
+@bot.tree.command(name="representative", description="Request the Representative role")
+async def representative(interaction: discord.Interaction):
+    await handle_role_request(interaction, REPRESENTATIVE_ROLE_ID, "Representative")
 
-@bot.command()
-async def pressmedia(ctx):
-    await handle_role_request(ctx, PRESS_ROLE_ID, "Press Media")
+@bot.tree.command(name="cgastaff", description="Request the CGA Staff role")
+async def cgastaff(interaction: discord.Interaction):
+    await handle_role_request(interaction, CGA_STAFF_ROLE_ID, "CGA Staff")
 
+async def handle_role_request(interaction: discord.Interaction, role_id, role_name):
+    await interaction.response.send_modal(RoleRequestModal(role_id, role_name, title=f"Request {role_name}"))
 
-#this logic handles the code not checking to see if the role has been removed drom Discord, but database did not reflect that so it assumed role was still apllied
 @bot.event
-async def on_member_update(before, after):
-    if before.roles != after.roles:
-        removed_roles = [role for role in before.roles if role not in after.roles]
-        for role in removed_roles:
-            cursor.execute("DELETE FROM role_requests WHERE discord_id = ? AND role_id = ? AND approved = 1", (after.id, role.id))
-            conn.commit()
-            print(f"Removed role {role.name} for user {after.name} from database.")
-
-async def log_audit(guild, user, action):
-    channel = bot.get_channel(AUDIT_LOG_CHANNEL_ID)
-    if channel:
-        embed = discord.Embed(title="Audit Log", description=action, timestamp=datetime.datetime.now())
-        embed.set_author(name=user.name, icon_url=user.avatar.url if user.avatar else "")
-        await channel.send(embed=embed)
-
+async def on_ready():
+    print(f'Logged in as {bot.user.name}')
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(e)
 
                  
 bot.run(TOKEN)
