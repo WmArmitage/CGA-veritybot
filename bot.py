@@ -143,14 +143,7 @@ async def send_pending_requests_embed(guild):
 
     await approval_channel.send(embed=embed, view=view)
 
-      
- # Create buttons for each request
-        approve_button = discord.ui.Button(label="Approve", style=discord.ButtonStyle.success, custom_id=f"approve_{user_id}_{role_id}")
-        decline_button = discord.ui.Button(label="Decline", style=discord.ButtonStyle.danger, custom_id=f"decline_{user_id}_{role_id}")
-        view.add_item(approve_button)
-        view.add_item(decline_button)
-
-    await approval_channel.send(embed=embed)
+    
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
