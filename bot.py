@@ -42,6 +42,9 @@ conn.commit()
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
 
+#XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+"""
 class RoleRequestModal(discord.ui.Modal):
     def __init__(self, role_id, role_name, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -61,7 +64,48 @@ async def on_submit(self, interaction: discord.Interaction):
             await log_audit(interaction.guild, interaction.user, f"Requested role: {self.role_name}, Reason: {reason}")
         except sqlite3.Error as e:
             await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
+"""
 
+#trying copilot's suggestion of having the onsubmit be inside the class and including improved error logging
+
+class RoleRequestModal(discord.ui.Modal):
+    def __init__(self, role_id, role_name, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.role_id = role_id
+        self.role_name = role_name
+        self.add_item(discord.ui.TextInput(label="Why do you want this role?", style=discord.TextStyle.paragraph))
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            # Retrieve the reason from the modal's text input
+            reason = self.children[0].value
+            user_id = interaction.user.id
+            username = interaction.user.name
+
+            # Attempt to insert the request into the database
+            cursor.execute("INSERT INTO role_requests (discord_id, username, role_id, request_reason) VALUES (?, ?, ?, ?)",
+                           (user_id, username, self.role_id, reason))
+            conn.commit()
+
+            # Send a confirmation response to the user
+            await interaction.response.send_message(f"Your request for {self.role_name} has been submitted.", ephemeral=True)
+
+            # Update pending requests embed and log the request
+            await send_pending_requests_embed(interaction.guild)
+            await log_audit(interaction.guild, interaction.user, f"Requested role: {self.role_name}, Reason: {reason}")
+        except sqlite3.Error as db_error:
+            # Handle database-related errors
+            print(f"Database error: {db_error}")
+            await interaction.response.send_message("There was an issue saving your request. Please try again later.", ephemeral=True)
+        except Exception as e:
+            # Catch any other unexpected errors
+            print(f"Unexpected error: {e}")
+            await interaction.response.send_message("An unexpected error occurred. Please try again.", ephemeral=True)
+
+
+
+
+#XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 async def handle_role_request(interaction: discord.Interaction, role_id, role_name):
     await interaction.response.send_modal(RoleRequestModal(role_id, role_name, title=f"Request {role_name}"))
