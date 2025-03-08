@@ -155,7 +155,7 @@ class DeclineReasonModal(discord.ui.Modal):
 @bot.command() 
 async def viewdb(interaction: discord.Interaction):
     admin_role = discord.utils.get(interaction.guild.roles, id=ADMIN_ROLE_ID)
-    if admin_role not in interaction.user.roles: discord.Interaction.author.roles:
+    if admin_role not in interaction.user.roles: 
         await interaction: discord.Interaction.send("You do not have permission to view the database.")
         return
     try:
