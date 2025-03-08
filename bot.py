@@ -160,11 +160,11 @@ async def viewdb(interaction: discord.Interaction):
         return
     try:
         with open(DATABASE_FILE, 'rb') as f:
-            await interaction: discord.Interaction.send(file=discord.File(f, 'role_requests.db'))
+            await interaction.response.send_message(file=discord.File(f, 'role_requests.db'))
     except FileNotFoundError:
-        await interaction: discord.Interaction.send("Database file not found.")
+        await interaction.response.send_message("Database file not found.")
     except Exception as e:
-        await interaction: discord.Interaction.send(f"An error occurred: {e}")
+        await interaction.response.send_message(f"An error occurred: {e}")
 
 #define roles
 
