@@ -116,8 +116,6 @@ async def send_pending_requests_embed(guild):
         approval_channel = bot.get_channel(APPROVAL_CHANNEL_ID)
         if approval_channel:
             await approval_channel.send("No pending role requests at the moment.")
-        else:
-            print(f"Approval channel with ID {APPROVAL_CHANNEL_ID} not found.")
         return
 
     approval_channel = bot.get_channel(APPROVAL_CHANNEL_ID)
@@ -126,17 +124,25 @@ async def send_pending_requests_embed(guild):
         return
 
     embed = discord.Embed(title="Pending Role Requests", color=0x00ff00)
+
     view = discord.ui.View()  # Create a view for the buttons
-    MAX_FIELDS = 25
-    for i, (user_id, username, role_id, request_reason) in enumerate(requests):
-        if i % MAX_FIELDS == 0 and i > 0:
-            await approval_channel.send(embed=embed)
-            embed = discord.Embed(title="Pending Role Requests (continued)", color=0x00ff00)
+
+    for user_id, username, role_id, request_reason in requests:
         role = guild.get_role(role_id)
         if not role:
             print(f"Role with ID {role_id} not found in guild {guild.name}.")
             continue
+
         embed.add_field(name=username, value=f"**Role:** {role.name}\n**Reason:** {request_reason}", inline=False)
+
+        # Create buttons for each request
+        approve_button = discord.ui.Button(label="Approve", style=discord.ButtonStyle.success, custom_id=f"approve_{user_id}_{role_id}")
+        decline_button = discord.ui.Button(label="Decline", style=discord.ButtonStyle.danger, custom_id=f"decline_{user_id}_{role_id}")
+        view.add_item(approve_button)
+        view.add_item(decline_button)
+
+    await approval_channel.send(embed=embed, view=view)
+
       
  # Create buttons for each request
         approve_button = discord.ui.Button(label="Approve", style=discord.ButtonStyle.success, custom_id=f"approve_{user_id}_{role_id}")
