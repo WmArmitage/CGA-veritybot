@@ -29,14 +29,7 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 
 # Database setup
-"""
-conn = sqlite3.connect(DATABASE_FILE)
-cursor = conn.cursor()
-cursor.execute('''CREATE TABLE IF NOT EXISTS role_requests
-                  (discord_id INTEGER PRIMARY KEY, username TEXT, role_id INTEGER, approved INTEGER DEFAULT 0, request_reason TEXT, decline_reason TEXT)''')
-cursor.execute("CREATE INDEX IF NOT EXISTS idx_approved ON role_requests (approved)") # database index
-conn.commit()
-"""
+
 conn = sqlite3.connect(DATABASE_FILE)
 cursor = conn.cursor()
 cursor.execute('''CREATE TABLE IF NOT EXISTS role_requests (
@@ -48,6 +41,12 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS role_requests (
                   decline_reason TEXT,
                   PRIMARY KEY (discord_id, role_id))''')
 cursor.execute("CREATE INDEX IF NOT EXISTS idx_approved ON role_requests (approved)")
+cursor.execute("UPDATE role_requests SET decline_reason = ? WHERE discord_id = ? AND role_id = ?", 
+               (reason, self.user_id, self.role_id))
+cursor.execute("DELETE FROM role_requests WHERE discord_id = ? AND role_id = ? AND approved = 0", 
+               (self.user_id, self.role_id))
+conn.commit()
+
 conn.commit()
 
 
@@ -202,9 +201,10 @@ async def on_interaction(interaction: discord.Interaction):
                 print(f"Unexpected error during role approval: {e}")
                 await interaction.response.send_message("An unexpected error occurred. Please contact an admin.", ephemeral=True)
 
-        elif action == "decline":
-            await interaction.response.defer(ephemeral=True)
-            await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
+          elif custom_id.startswith("decline_"):
+              await interaction.response.defer(ephemeral=True)  # Defers the interaction response
+              await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
+
 
 
 class DeclineReasonModal(discord.ui.Modal):
@@ -217,28 +217,28 @@ class DeclineReasonModal(discord.ui.Modal):
     async def on_submit(self, interaction: discord.Interaction):
         reason = self.children[0].value
         try:
-            cursor.execute(
-                "UPDATE role_requests SET decline_reason = ? WHERE discord_id = ? AND role_id = ?",
-                (reason, self.user_id, self.role_id)
-            )
-            cursor.execute(
-                "DELETE FROM role_requests WHERE discord_id = ? AND role_id = ? AND approved = 0",
-                (self.user_id, self.role_id)
-            )
+            # Update the database with the decline reason
+            cursor.execute("UPDATE role_requests SET decline_reason = ? WHERE discord_id = ? AND role_id = ?", 
+                           (reason, self.user_id, self.role_id))
+            cursor.execute("DELETE FROM role_requests WHERE discord_id = ? AND role_id = ? AND approved = 0", 
+                           (self.user_id, self.role_id))
             conn.commit()
 
-            # Defer and send a follow-up response
-            await interaction.response.defer(ephemeral=True)
-            await interaction.followup.send("Request declined successfully.", ephemeral=True)
+            # Send feedback to the administrator
+            await interaction.response.send_message("Request declined successfully.", ephemeral=True)
 
-            # Update embed and log audit
+            # Optional: Notify the requestor about the decline
+            guild = interaction.guild
+            member = guild.get_member(self.user_id)
+            if member:
+                await member.send(f"Your role request for `{guild.get_role(self.role_id).name}` was declined. Reason: {reason}")
+
+            # Update the embed in the approval channel
             await send_pending_requests_embed(interaction.guild)
-            await log_audit(
-                interaction.guild, interaction.user,
-                f"Declined request from user ID: {self.user_id}, Role ID: {self.role_id}, Reason: {reason}."
-            )
+
         except sqlite3.Error as e:
             await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
+
 
 
 @bot.command() 
