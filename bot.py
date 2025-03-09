@@ -193,7 +193,7 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.response.send_message("An unexpected error occurred. Please contact an admin.", ephemeral=True)
 
     elif custom_id.startswith("decline_"):
-        await interaction.response.defer(ephemeral=True)  # Defer to avoid timeout
+        #await interaction.response.defer(ephemeral=True)  # Defer to avoid timeout
         await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
 
 
