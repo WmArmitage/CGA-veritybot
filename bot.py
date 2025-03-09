@@ -183,27 +183,28 @@ async def on_interaction(interaction: discord.Interaction):
         cursor.execute("SELECT approved FROM role_requests WHERE discord_id = ? AND role_id = ?", (user_id, role_id))
         result = cursor.fetchone()
 
-        if action == "approve":
-            if result and result[0] == 1:
-                await interaction.response.send_message("This request has already been approved.", ephemeral=True)
-                return
-            elif not result:
-                await interaction.response.send_message("No matching request found.", ephemeral=True)
-                return
-            try:
-                await member.add_roles(role)
-                cursor.execute("UPDATE role_requests SET approved = 1 WHERE discord_id = ? AND role_id = ?", (user_id, role_id))
-                conn.commit()
-                await interaction.response.send_message(f"Approved {member.name} for {role.name}.", ephemeral=True)
-            except discord.Forbidden:
-                await interaction.response.send_message("No permission to assign role.", ephemeral=True)
-            except Exception as e:
-                print(f"Unexpected error during role approval: {e}")
-                await interaction.response.send_message("An unexpected error occurred. Please contact an admin.", ephemeral=True)
+        if custom_id.startswith("approve_"):
+        if result and result[0] == 1:
+            await interaction.response.send_message("This request has already been approved.", ephemeral=True)
+            return
+        elif not result:
+            await interaction.response.send_message("No matching request found.", ephemeral=True)
+            return
+        try:
+            await member.add_roles(role)
+            cursor.execute("UPDATE role_requests SET approved = 1 WHERE discord_id = ? AND role_id = ?", (user_id, role_id))
+            conn.commit()
+            await interaction.response.send_message(f"Approved {member.name} for {role.name}.", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.response.send_message("No permission to assign role.", ephemeral=True)
+        except Exception as e:
+            print(f"Unexpected error during role approval: {e}")
+            await interaction.response.send_message("An unexpected error occurred. Please contact an admin.", ephemeral=True)
 
-elif custom_id.startswith("decline_"):
-    await interaction.response.defer(ephemeral=True)  # Defer to avoid timeout
-    await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
+    elif custom_id.startswith("decline_"):
+        await interaction.response.defer(ephemeral=True)  # Defer to avoid timeout
+        await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
+
 
 
 
