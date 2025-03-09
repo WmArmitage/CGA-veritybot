@@ -41,17 +41,7 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS role_requests (
                   decline_reason TEXT,
                   PRIMARY KEY (discord_id, role_id))''')
 cursor.execute("CREATE INDEX IF NOT EXISTS idx_approved ON role_requests (approved)")
-cursor.execute("UPDATE role_requests SET decline_reason = ? WHERE discord_id = ? AND role_id = ?", 
-               (reason, self.user_id, self.role_id))
-cursor.execute("DELETE FROM role_requests WHERE discord_id = ? AND role_id = ? AND approved = 0", 
-               (self.user_id, self.role_id))
-conn.commit()
-
-
-
-
-
-
+conn.commit()  # Commit the schema setup
 
 
 #bot code begins here
