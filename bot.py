@@ -201,7 +201,7 @@ async def on_interaction(interaction: discord.Interaction):
                 print(f"Unexpected error during role approval: {e}")
                 await interaction.response.send_message("An unexpected error occurred. Please contact an admin.", ephemeral=True)
 
-          elif custom_id.startswith("decline_"):
+            elif custom_id.startswith("decline_"):
               await interaction.response.defer(ephemeral=True)  # Defers the interaction response
               await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
 
