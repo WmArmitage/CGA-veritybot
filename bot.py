@@ -193,7 +193,11 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.response.send_message("An unexpected error occurred. Please contact an admin.", ephemeral=True)
 
     elif custom_id.startswith("decline_"):
-        #await interaction.response.defer(ephemeral=True)  # Defer to avoid timeout
+        # Handle the decline button click
+        parts = custom_id.split("_")
+        user_id = int(parts[1])
+        role_id = int(parts[2])
+        await interaction.response.defer(ephemeral=True)  # Defer to avoid timeout
         await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
 
 
@@ -232,6 +236,7 @@ class DeclineReasonModal(discord.ui.Modal):
         except sqlite3.Error as e:
             await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
 
+print(f"Decline button clicked with custom_id: {custom_id}")
 
 
 @bot.command() 
