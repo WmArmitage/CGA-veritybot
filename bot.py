@@ -183,7 +183,7 @@ async def on_interaction(interaction: discord.Interaction):
         cursor.execute("SELECT approved FROM role_requests WHERE discord_id = ? AND role_id = ?", (user_id, role_id))
         result = cursor.fetchone()
 
-        if custom_id.startswith("approve_"):
+    if custom_id.startswith("approve_"):
         if result and result[0] == 1:
             await interaction.response.send_message("This request has already been approved.", ephemeral=True)
             return
