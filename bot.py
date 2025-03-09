@@ -47,7 +47,8 @@ cursor.execute("DELETE FROM role_requests WHERE discord_id = ? AND role_id = ? A
                (self.user_id, self.role_id))
 conn.commit()
 
-conn.commit()
+PRAGMA table_info(role_requests);
+
 
 
 
