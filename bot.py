@@ -236,7 +236,7 @@ class DeclineReasonModal(discord.ui.Modal):
         except sqlite3.Error as e:
             await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
 
-print(f"Decline button clicked with custom_id: {custom_id}")
+
 
 
 @bot.command() 
