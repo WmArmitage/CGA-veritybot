@@ -124,38 +124,50 @@ async def senator(ctx, name: str):
         cursor.execute("INSERT INTO verification_requests (user_id, discord_username, legislator_name, role, status) VALUES (?, ?, ?, ?, ?)",
                        (ctx.author.id, ctx.author.name, name, "Senator", "Pending"))
         conn.commit()
-    await ctx.respond(f"Request submitted for {name} as Senator.")
+        await ctx.respond(f"Request submitted for {name} as Senator.")
 
 @bot.slash_command(name="representative")
 async def representative(ctx, name: str):
-    if name not in legislators:
-        await ctx.respond("Invalid legislator name. Please use the correct full name.")
-        return
-    cursor.execute("SELECT * FROM verification_requests WHERE user_id = ?", (ctx.author.id,))
-    if cursor.fetchone():
-        await ctx.respond("You already have a pending request.")
-        return
-    cursor.execute("INSERT INTO verification_requests (user_id, discord_name, role_requested, legislator_name, status) VALUES (?, ?, ?, ?, ?)",
-                   (ctx.author.id, ctx.author.name, "Representative", name, "Pending"))
-    conn.commit()
-    await ctx.respond(f"Request submitted for {name} as Representative.")
+    with sqlite3.connect("verification_bot.db") as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT full_name FROM legislators WHERE full_name = ?", (name,))
+        if not cursor.fetchone():
+            await ctx.respond("Invalid legislator name. Please use the correct full name.")
+            return
+        cursor.execute("SELECT * FROM verification_requests WHERE user_id = ?", (ctx.author.id,))
+        if cursor.fetchone():
+            await ctx.respond("You already have a pending request.")
+            return
+        cursor.execute("INSERT INTO verification_requests (user_id, discord_username, legislator_name, role, status) VALUES (?, ?, ?, ?, ?)",
+                       (ctx.author.id, ctx.author.name, name, "Representative", "Pending"))
+        conn.commit()
+        await ctx.respond(f"Request submitted for {name} as Representative.")
 
 @bot.slash_command(name="cgastaff")
 async def cgastaff(ctx):
-    cursor.execute("SELECT * FROM verification_requests WHERE user_id = ?", (ctx.author.id,))
-    if cursor.fetchone():
-        await ctx.respond("You already have a pending request.")
-        return
-    cursor.execute("INSERT INTO verification_requests (user_id, discord_name, role_requested, legislator_name, status) VALUES (?, ?, ?, ?, ?)",
-                   (ctx.author.id, ctx.author.name, "CGA Staff", "N/A", "Pending"))
-    conn.commit()
-    await ctx.respond("Request submitted for CGA Staff.")
+    with sqlite3.connect("verification_bot.db") as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM verification_requests WHERE user_id = ?", (ctx.author.id,))
+        if cursor.fetchone():
+            await ctx.respond("You already have a pending request.")
+            return
+        cursor.execute("INSERT INTO verification_requests (user_id, discord_username, legislator_name, role, status) VALUES (?, ?, ?, ?, ?)",
+                       (ctx.author.id, ctx.author.name, "N/A", "CGA Staff", "Pending"))
+        conn.commit()
+        await ctx.respond("Request submitted for CGA Staff.")
 
 @bot.slash_command(name="pressmedia")
 async def pressmedia(ctx):
-    cursor.execute("SELECT * FROM verification_requests WHERE user_id = ?", (ctx.author.id,))
-    if cursor.fetchone():
-        await ctx.respond("You already have a pending request.")
+    with sqlite3.connect("verification_bot.db") as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM verification_requests WHERE user_id = ?", (ctx.author.id,))
+        if cursor.fetchone():
+            await ctx.respond("You already have a pending request.")
+            return
+        cursor.execute("INSERT INTO verification_requests (user_id, discord_username, legislator_name, role, status) VALUES (?, ?, ?, ?, ?)",
+                       (ctx.author.id, ctx.author.name, "N/A", "Press/Media", "Pending"))
+        conn.commit()
+        await ctx.respond("Request submitted for Press/Media.")
         return
     cursor.execute("INSERT INTO verification_requests (user_id, discord_name, role_requested, legislator_name, status) VALUES (?, ?, ?, ?, ?)",
                    (ctx.author.id, ctx.author.name, "Press/Media", "N/A", "Pending"))
