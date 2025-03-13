@@ -1,13 +1,13 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 import sqlite3
-import io
 import os
+import requests
+import asyncio
 import datetime
 
-# Replace with your actual values
-
+# Constants
 ADMIN_ROLE_ID = 1242292827510276269
 APPROVAL_CHANNEL_ID = 1242300716119494806
 SENATOR_ROLE_ID = 1242296657933107221
@@ -15,266 +15,366 @@ REPRESENTATIVE_ROLE_ID = 1242296757954674758
 CGA_STAFF_ROLE_ID = 1244067941662720061
 PRESS_ROLE_ID = 1242989393049030727
 GUILD_ID = 1242198415547433030
-DATABASE_FILE = 'role_requests.db' #database file name
 AUDIT_LOG_CHANNEL_ID = 1347258435452014703
+LEGISLATOR_API_URL = "https://data.ct.gov/resource/rgw6-bpst.json"
+TOKEN = os.getenv("TOKEN")
+API_KEY = os.getenv("API_KEY")  # Ensure the API key is stored securely
 
-TOKEN = os.getenv("TOKEN")  # Read from Railway variables
 
-
+# Bot setup
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
-
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 
 # Database setup
-
-conn = sqlite3.connect(DATABASE_FILE)
-cursor = conn.cursor()
-cursor.execute('''CREATE TABLE IF NOT EXISTS role_requests (
-                  discord_id INTEGER,
-                  username TEXT,
-                  role_id INTEGER,
-                  approved INTEGER DEFAULT 0,
-                  request_reason TEXT,
-                  decline_reason TEXT,
-                  PRIMARY KEY (discord_id, role_id))''')
-cursor.execute("CREATE INDEX IF NOT EXISTS idx_approved ON role_requests (approved)")
-conn.commit()  # Commit the schema setup
-
-
-#bot code begins here
-
-@bot.event
-async def on_ready():
-    print(f'Logged in as {bot.user.name}')
-    try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} command(s)")
-    except Exception as e:
-        print(e)
-
-
-
-class RoleRequestModal(discord.ui.Modal):
-    def __init__(self, role_id, role_name, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.role_id = role_id
-        self.role_name = role_name
-        self.add_item(discord.ui.TextInput(label="Why do you want this role?", style=discord.TextStyle.paragraph))
-
-    async def on_submit(self, interaction: discord.Interaction):
-        try:
-            # Retrieve the reason from the modal's text input
-            reason = self.children[0].value
-            user_id = interaction.user.id
-            username = interaction.user.name
-
-            # Attempt to insert the request into the database
-            cursor.execute("INSERT INTO role_requests (discord_id, username, role_id, request_reason) VALUES (?, ?, ?, ?)",
-                           (user_id, username, self.role_id, reason))
-            conn.commit()
-
-            # Send a confirmation response to the user
-            await interaction.response.send_message(f"Your request for {self.role_name} has been submitted.", ephemeral=True)
-
-            # Update pending requests embed and log the request
-            await send_pending_requests_embed(interaction.guild)
-            await log_audit(interaction.guild, interaction.user, f"Requested role: {self.role_name}, Reason: {reason}")
-        except sqlite3.Error as db_error:
-            # Handle database-related errors
-            print(f"Database error: {db_error}")
-            await interaction.response.send_message("There was an issue saving your request. Please try again later.", ephemeral=True)
-        except Exception as e:
-            # Catch any other unexpected errors
-            print(f"Unexpected error: {e}")
-            await interaction.response.send_message("An unexpected error occurred. Please try again.", ephemeral=True)
-
-
-
-
-async def send_pending_requests_embed(guild):
-    try:
-        cursor.execute("SELECT discord_id, username, role_id, request_reason FROM role_requests WHERE approved = 0")
-        requests = cursor.fetchall()
-    except sqlite3.Error as e:
-        print(f"Database error: {e}")
-        return
-
-    if not requests:
-        approval_channel = bot.get_channel(APPROVAL_CHANNEL_ID)
-        if approval_channel:
-            await approval_channel.send("No pending role requests at the moment.")
-        return
-
-    approval_channel = bot.get_channel(APPROVAL_CHANNEL_ID)
-    if not approval_channel:
-        print(f"Approval channel with ID {APPROVAL_CHANNEL_ID} not found.")
-        return
-
-    embed = discord.Embed(title="Pending Role Requests", color=0x00ff00)
-
-    view = discord.ui.View()  # Create a view for the buttons
-
-    for user_id, username, role_id, request_reason in requests:
-        role = guild.get_role(role_id)
-        if not role:
-            print(f"Role with ID {role_id} not found in guild {guild.name}.")
-            continue
-
-        embed.add_field(name=username, value=f"**Role:** {role.name}\n**Reason:** {request_reason}", inline=False)
-
-        # Create buttons for each request
-        approve_button = discord.ui.Button(label="Approve", style=discord.ButtonStyle.success, custom_id=f"approve_{user_id}_{role_id}")
-        decline_button = discord.ui.Button(label="Decline", style=discord.ButtonStyle.danger, custom_id=f"decline_{user_id}_{role_id}")
-        view.add_item(approve_button)
-        view.add_item(decline_button)
-
-    await approval_channel.send(embed=embed, view=view)
-
+def init_db():
+    conn = sqlite3.connect("verification_bot.db")
+    cursor = conn.cursor()
     
+    # Legislators table (Synced from API)
+    cursor.execute('''CREATE TABLE IF NOT EXISTS legislators (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        full_name TEXT UNIQUE NOT NULL,
+                        role TEXT NOT NULL CHECK(role IN ('Senator', 'Representative'))
+                      )''')
+    
+    # Verification Requests (Tracks pending requests)
+    cursor.execute('''CREATE TABLE IF NOT EXISTS verification_requests (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id TEXT UNIQUE NOT NULL,
+                        discord_username TEXT NOT NULL,
+                        legislator_name TEXT NOT NULL,
+                        role TEXT NOT NULL,
+                        status TEXT NOT NULL CHECK(status IN ('Pending', 'Approved', 'Denied')),
+                        request_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                      )''')
+    
+    # Registered Users (Tracks assigned roles)
+    cursor.execute('''CREATE TABLE IF NOT EXISTS registered_users (
+                        user_id TEXT PRIMARY KEY,
+                        discord_username TEXT NOT NULL,
+                        legislator_name TEXT NOT NULL,
+                        role TEXT NOT NULL,
+                        assigned_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                      )''')
+    
+    conn.commit()
+    conn.close()
 
-@bot.event
-async def on_interaction(interaction: discord.Interaction):
-    custom_id = interaction.data.get("custom_id", "")
+# API Sync
+def fetch_legislators():
+    API_URL = "https://data.ct.gov/resource/rgw6-bpst.json"
+    API_TOKEN = os.getenv("API_TOKEN")  # Read from Railway variables
+    
+    headers = {"X-App-Token": API_TOKEN}
+    response = requests.get(API_URL, headers=headers)
+    
+    if response.status_code == 200:
+        data = response.json()
+        update_legislators(data)
+    else:
+        print("Failed to fetch legislators: ", response.status_code)
 
-    if not custom_id:
-        await interaction.response.send_message("Interaction has no valid custom ID.", ephemeral=True)
+def update_legislators(data):
+    conn = sqlite3.connect("verification_bot.db")
+    cursor = conn.cursor()
+    
+    # Store current legislators before update
+    cursor.execute("SELECT full_name FROM legislators")
+    existing_legislators = {row[0] for row in cursor.fetchall()}
+    
+    new_legislators = set()
+    for entry in data:
+        full_name = entry.get("name", "").strip()
+        role = entry.get("title", "").strip()
+        
+        if full_name and role in ("Senator", "Representative"):
+            new_legislators.add(full_name)
+            cursor.execute("INSERT OR IGNORE INTO legislators (full_name, role) VALUES (?, ?)", (full_name, role))
+    
+    # Remove legislators who are no longer in the API
+    removed_legislators = existing_legislators - new_legislators
+    for legislator in removed_legislators:
+        cursor.execute("DELETE FROM legislators WHERE full_name = ?", (legislator,))
+        print(f"Removed {legislator} (No longer in API)")  # Notify admin here
+    
+    conn.commit()
+    conn.close()
+
+# Run database setup
+init_db()
+fetch_legislators()
+
+# VERIFICATION REQUEST HANDLING
+
+@bot.slash_command(name="senator")
+async def senator(ctx, name: str):
+    with sqlite3.connect("verification_bot.db") as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT full_name FROM legislators WHERE full_name = ?", (name,))
+        if not cursor.fetchone():
+            await ctx.respond("Invalid legislator name. Please use the correct full name.")
+            return
+        cursor.execute("SELECT * FROM verification_requests WHERE user_id = ?", (ctx.author.id,))
+        if cursor.fetchone():
+            await ctx.respond("You already have a pending request.")
+            return
+        cursor.execute("INSERT INTO verification_requests (user_id, discord_username, legislator_name, role, status) VALUES (?, ?, ?, ?, ?)",
+                       (ctx.author.id, ctx.author.name, name, "Senator", "Pending"))
+        conn.commit()
+    await ctx.respond(f"Request submitted for {name} as Senator.")
+
+@bot.slash_command(name="representative")
+async def representative(ctx, name: str):
+    if name not in legislators:
+        await ctx.respond("Invalid legislator name. Please use the correct full name.")
+        return
+    cursor.execute("SELECT * FROM verification_requests WHERE user_id = ?", (ctx.author.id,))
+    if cursor.fetchone():
+        await ctx.respond("You already have a pending request.")
+        return
+    cursor.execute("INSERT INTO verification_requests (user_id, discord_name, role_requested, legislator_name, status) VALUES (?, ?, ?, ?, ?)",
+                   (ctx.author.id, ctx.author.name, "Representative", name, "Pending"))
+    conn.commit()
+    await ctx.respond(f"Request submitted for {name} as Representative.")
+
+@bot.slash_command(name="cgastaff")
+async def cgastaff(ctx):
+    cursor.execute("SELECT * FROM verification_requests WHERE user_id = ?", (ctx.author.id,))
+    if cursor.fetchone():
+        await ctx.respond("You already have a pending request.")
+        return
+    cursor.execute("INSERT INTO verification_requests (user_id, discord_name, role_requested, legislator_name, status) VALUES (?, ?, ?, ?, ?)",
+                   (ctx.author.id, ctx.author.name, "CGA Staff", "N/A", "Pending"))
+    conn.commit()
+    await ctx.respond("Request submitted for CGA Staff.")
+
+@bot.slash_command(name="pressmedia")
+async def pressmedia(ctx):
+    cursor.execute("SELECT * FROM verification_requests WHERE user_id = ?", (ctx.author.id,))
+    if cursor.fetchone():
+        await ctx.respond("You already have a pending request.")
+        return
+    cursor.execute("INSERT INTO verification_requests (user_id, discord_name, role_requested, legislator_name, status) VALUES (?, ?, ?, ?, ?)",
+                   (ctx.author.id, ctx.author.name, "Press/Media", "N/A", "Pending"))
+    conn.commit()
+    await ctx.respond("Request submitted for Press/Media.")
+
+#ADMIN APPROVAL SYSTEM
+
+
+def get_pending_requests():
+    """Fetch all pending verification requests."""
+    cursor.execute("SELECT id, user_id, username, role_requested, legislator_name, request_time FROM verification_requests WHERE status = 'pending'")
+    return cursor.fetchall()
+
+def approve_request(request_id):
+    """Approve a verification request and assign the role."""
+    cursor.execute("UPDATE verification_requests SET status = 'approved' WHERE id = ?", (request_id,))
+    conn.commit()
+    return True
+
+def deny_request(request_id):
+    """Deny a verification request."""
+    cursor.execute("UPDATE verification_requests SET status = 'denied' WHERE id = ?", (request_id,))
+    conn.commit()
+    return True
+
+def expire_old_requests():
+    """Automatically expire requests that are older than 24 hours."""
+    expiration_time = datetime.utcnow() - timedelta(hours=24)
+    cursor.execute("UPDATE verification_requests SET status = 'expired' WHERE status = 'pending' AND request_time < ?", (expiration_time,))
+    conn.commit()
+    return True
+
+# Command for admins to check pending requests
+@bot.command()
+@commands.has_role("Administrator")
+async def pending_requests(ctx):
+    cursor.execute("SELECT id, username, role_requested, legislator_name FROM requests WHERE status = 'pending'")
+    requests = cursor.fetchall()
+    
+    if not requests:
+        await ctx.send("No pending requests.")
+        return
+    
+    message = "**Pending Verification Requests:**\n"
+    for req in requests:
+        message += f"ID: {req[0]} | User: {req[1]} | Role: {req[2]} | Legislator: {req[3]}\n"
+    
+    await ctx.send(message)
+
+# Admin approval command
+@bot.command()
+@commands.has_role("Administrator")
+async def approve(ctx, request_id: int):
+    cursor.execute("SELECT user_id, role_requested FROM requests WHERE id = ? AND status = 'pending'", (request_id,))
+    request = cursor.fetchone()
+    
+    if not request:
+        await ctx.send("Invalid or already processed request ID.")
+        return
+    
+    user = ctx.guild.get_member(request[0])
+    role = discord.utils.get(ctx.guild.roles, name=request[1])
+    
+    if user and role:
+        await user.add_roles(role)
+        cursor.execute("UPDATE requests SET status = 'approved' WHERE id = ?", (request_id,))
+        conn.commit()
+        await user.send(f"Your verification request has been approved! You have been assigned the {role.name} role.")
+        await ctx.send(f"Approved request {request_id}. {user.mention} has been assigned {role.name}.")
+    else:
+        await ctx.send("Error: User or role not found.")
+
+# Admin denial command
+@bot.command()
+@commands.has_role("Administrator")
+async def deny(ctx, request_id: int):
+    cursor.execute("SELECT user_id FROM requests WHERE id = ? AND status = 'pending'", (request_id,))
+    request = cursor.fetchone()
+    
+    if not request:
+        await ctx.send("Invalid or already processed request ID.")
+        return
+    
+    user = ctx.guild.get_member(request[0])
+    if user:
+        await user.send("Your verification request has been denied. Contact an admin if you believe this is an error.")
+    
+    cursor.execute("UPDATE requests SET status = 'denied' WHERE id = ?", (request_id,))
+    conn.commit()
+    await ctx.send(f"Denied request {request_id}.")
+
+# Auto-expiration for old requests
+@tasks.loop(minutes=60)
+async def expire_requests():
+    expiration_time = datetime.utcnow() - timedelta(hours=24)
+    cursor.execute("SELECT id, user_id FROM requests WHERE status = 'pending' AND timestamp <= ?", (expiration_time,))
+    expired_requests = cursor.fetchall()
+    
+    for request in expired_requests:
+        user = bot.get_user(request[1])
+        if user:
+            await user.send("Your verification request has expired due to inactivity. Please submit a new request if you still require verification.")
+        cursor.execute("DELETE FROM requests WHERE id = ?", (request[0],))
+    conn.commit()
+
+    # ROLE LIMIT API
+
+    db.commit()
+
+bot = commands.Bot(command_prefix="/")
+
+def fetch_legislators():
+    headers = {"X-App-Token": API_TOKEN}
+    response = requests.get(API_URL, headers=headers)
+    if response.status_code == 200:
+        return response.json()
+    return []
+
+@tasks.loop(hours=24)
+async def refresh_legislators():
+    """Refresh the list of legislators daily."""
+    legislators = fetch_legislators()
+    cursor.execute("DELETE FROM legislators")  # Clear old data
+    for leg in legislators:
+        full_name = f"{leg.get('first_name')} {leg.get('last_name')}"
+        role = "Senator" if leg.get("chamber") == "Senate" else "Representative"
+        cursor.execute("INSERT INTO legislators (full_name, role) VALUES (?, ?) ON CONFLICT(full_name) DO NOTHING", (full_name, role))
+    db.commit()
+
+@bot.command()
+@commands.has_role("Administrator")
+async def refresh_legislators_cmd(ctx):
+    """Manually refresh the legislator list."""
+    refresh_legislators()
+    await ctx.send("Legislator list updated.")
+
+@bot.command()
+@commands.has_role("Administrator")
+async def legislativestatus(ctx):
+    """Show current role count."""
+    cursor.execute("SELECT role, COUNT(*) FROM legislators GROUP BY role")
+    counts = {row[0]: row[1] for row in cursor.fetchall()}
+    senator_count = counts.get("Senator", 0)
+    rep_count = counts.get("Representative", 0)
+    
+    await ctx.send(f"Senators: {senator_count}/36\nRepresentatives: {rep_count}/151")
+
+@bot.command()
+async def request_role(ctx, role: str, first_name: str, last_name: str):
+    """Request a role (Senator/Representative) by providing a first and last name."""
+    full_name = f"{first_name} {last_name}"
+    cursor.execute("SELECT role FROM legislators WHERE full_name = ?", (full_name,))
+    result = cursor.fetchone()
+    
+    if result and result[0] == role:
+        await ctx.send(f"{full_name} is verified as a {role}. Your request has been sent to the admins.")
+        # Send request for admin approval (implementation in another module)
+    else:
+        await ctx.send(f"Error: {full_name} is not listed as a {role}.")
+
+refresh_legislators.start()
+
+# Function to check if user already has a role
+def user_has_role(discord_id):
+    cursor.execute("SELECT role FROM verified_users WHERE discord_id = ?", (discord_id,))
+    return cursor.fetchone()
+
+# Slash command to request a role
+@bot.command()
+async def senator(ctx, name: str):
+    if user_has_role(ctx.author.id):
+        await ctx.send("You already have a verified role. Contact an admin if this is an error.")
+        return
+    
+    # Send request to admin channel
+    admin_channel = bot.get_channel(ADMIN_CHANNEL_ID)
+    await admin_channel.send(f"New Senator request: {name} from {ctx.author.mention}")
+
+@bot.command()
+async def representative(ctx, name: str):
+    if user_has_role(ctx.author.id):
+        await ctx.send("You already have a verified role. Contact an admin if this is an error.")
+        return
+    
+    # Send request to admin channel
+    admin_channel = bot.get_channel(ADMIN_CHANNEL_ID)
+    await admin_channel.send(f"New Representative request: {name} from {ctx.author.mention}")
+
+# Auto-remove users whose names are no longer in the API
+@tasks.loop(hours=24)
+async def check_legislators():
+    response = requests.get(API_URL, headers={"X-App-Token": API_TOKEN})
+    if response.status_code != 200:
+        print("Failed to fetch API data")
         return
 
-    if custom_id.startswith("approve_") or custom_id.startswith("decline_"):
-        parts = custom_id.split("_")
-        if len(parts) != 3:
-            await interaction.response.send_message("Invalid interaction format.", ephemeral=True)
-            return
+    data = response.json()
+    current_legislators = {f"{entry['first_name']} {entry['last_name']}" for entry in data}
 
-        action, user_id, role_id = parts
-        user_id = int(user_id)
-        role_id = int(role_id)
+    cursor.execute("SELECT discord_id, legislator_name FROM verified_users")
+    for discord_id, legislator_name in cursor.fetchall():
+        if legislator_name not in current_legislators:
+            # Remove the role
+            user = bot.get_user(discord_id)
+            if user:
+                member = discord.utils.get(ctx.guild.members, id=discord_id)
+                if member:
+                    role = discord.utils.get(ctx.guild.roles, name="Senator") or discord.utils.get(ctx.guild.roles, name="Representative")
+                    if role:
+                        await member.remove_roles(role)
 
-        admin_role = discord.utils.get(interaction.guild.roles, id=ADMIN_ROLE_ID)
-        if admin_role not in interaction.user.roles:
-            await interaction.response.send_message("You do not have permission.", ephemeral=True)
-            return
+            # Notify admin
+            admin_channel = bot.get_channel(ADMIN_CHANNEL_ID)
+            await admin_channel.send(f"Legislator {legislator_name} no longer in API. Role removed from {user.mention}")
 
-        guild = interaction.guild
-        member = guild.get_member(user_id)
-        role = guild.get_role(role_id)
-
-        if not member:
-            print(f"Member with ID {user_id} not found in guild {guild.name}.")
-            await interaction.response.send_message("User not found.", ephemeral=True)
-            return
-        if not role:
-            print(f"Role with ID {role_id} not found in guild {guild.name}.")
-            await interaction.response.send_message("Role not found.", ephemeral=True)
-            return
-
-        cursor.execute("SELECT approved FROM role_requests WHERE discord_id = ? AND role_id = ?", (user_id, role_id))
-        result = cursor.fetchone()
-
-    if custom_id.startswith("approve_"):
-        if result and result[0] == 1:
-            await interaction.response.send_message("This request has already been approved.", ephemeral=True)
-            return
-        elif not result:
-            await interaction.response.send_message("No matching request found.", ephemeral=True)
-            return
-        try:
-            await member.add_roles(role)
-            cursor.execute("UPDATE role_requests SET approved = 1 WHERE discord_id = ? AND role_id = ?", (user_id, role_id))
-            conn.commit()
-            await interaction.response.send_message(f"Approved {member.name} for {role.name}.", ephemeral=True)
-        except discord.Forbidden:
-            await interaction.response.send_message("No permission to assign role.", ephemeral=True)
-        except Exception as e:
-            print(f"Unexpected error during role approval: {e}")
-            await interaction.response.send_message("An unexpected error occurred. Please contact an admin.", ephemeral=True)
-
-    elif custom_id.startswith("decline_"):
-        # Handle the decline button click
-        parts = custom_id.split("_")
-        user_id = int(parts[1])
-        role_id = int(parts[2])
-        await interaction.response.defer(ephemeral=True)  # Defer to avoid timeout
-        await interaction.response.send_modal(DeclineReasonModal(user_id, role_id))
-
-
-
-
-
-class DeclineReasonModal(discord.ui.Modal):
-    def __init__(self, user_id, role_id, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.user_id = user_id
-        self.role_id = role_id
-        self.add_item(discord.ui.TextInput(label="Reason for Decline", style=discord.TextStyle.paragraph))
-
-    async def on_submit(self, interaction: discord.Interaction):
-        reason = self.children[0].value
-        try:
-            # Update the database with the decline reason
-            cursor.execute("UPDATE role_requests SET decline_reason = ? WHERE discord_id = ? AND role_id = ?", 
-                           (reason, self.user_id, self.role_id))
-            cursor.execute("DELETE FROM role_requests WHERE discord_id = ? AND role_id = ? AND approved = 0", 
-                           (self.user_id, self.role_id))
+            # Remove from database
+            cursor.execute("DELETE FROM verified_users WHERE discord_id = ?", (discord_id,))
             conn.commit()
 
-            # Send feedback to the administrator
-            await interaction.response.send_message("Request declined successfully.", ephemeral=True)
 
-            # Optional: Notify the requestor about the decline
-            guild = interaction.guild
-            member = guild.get_member(self.user_id)
-            if member:
-                await member.send(f"Your role request for `{guild.get_role(self.role_id).name}` was declined. Reason: {reason}")
-
-            # Update the embed in the approval channel
-            await send_pending_requests_embed(interaction.guild)
-
-        except sqlite3.Error as e:
-            await interaction.response.send_message(f"Database error: {e}", ephemeral=True)
-
-
-
-
-@bot.command() 
-async def viewdb(interaction: discord.Interaction):
-    admin_role = discord.utils.get(interaction.guild.roles, id=ADMIN_ROLE_ID)
-    if admin_role not in interaction.user.roles: 
-        await interaction.response.send_message("You do not have permission to view the database.")
-        return
-    try:
-        with open(DATABASE_FILE, 'rb') as f:
-            await interaction.response.send_message(file=discord.File(f, 'role_requests.db'))
-    except FileNotFoundError:
-        await interaction.response.send_message("Database file not found.")
-    except Exception as e:
-        await interaction.response.send_message(f"An error occurred: {e}")
-
-#define roles
-
-@bot.tree.command(name="pressmedia", description="Request the Press Media role")
-async def pressmedia(interaction: discord.Interaction):
-    await handle_role_request(interaction, PRESS_ROLE_ID, "Press Media")
-
-@bot.tree.command(name="senator", description="Request the Senator role")
-async def senator(interaction: discord.Interaction):
-    await handle_role_request(interaction, SENATOR_ROLE_ID, "Senator")
-
-@bot.tree.command(name="representative", description="Request the Representative role")
-async def representative(interaction: discord.Interaction):
-    await handle_role_request(interaction, REPRESENTATIVE_ROLE_ID, "Representative")
-
-@bot.tree.command(name="cgastaff", description="Request the CGA Staff role")
-async def cgastaff(interaction: discord.Interaction):
-    await handle_role_request(interaction, CGA_STAFF_ROLE_ID, "CGA Staff")
-
-async def handle_role_request(interaction: discord.Interaction, role_id, role_name):
-    await interaction.response.send_modal(RoleRequestModal(role_id, role_name, title=f"Request {role_name}"))
-
-
-
-                 
-bot.run(TOKEN)
+            bot.run(TOKEN)
