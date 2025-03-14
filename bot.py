@@ -112,7 +112,7 @@ fetch_legislators()
 
 # VERIFICATION REQUEST HANDLING
 
-@bot.slash_command(name="senator")
+@bot.tree.command(name="senator")
 async def senator(ctx, name: str):
     with sqlite3.connect("verification_bot.db") as conn:
         cursor = conn.cursor()
@@ -129,7 +129,7 @@ async def senator(ctx, name: str):
         conn.commit()
         await ctx.respond(f"Request submitted for {name} as Senator.")
 
-@bot.slash_command(name="representative")
+@bot.tree.command(name="representative")
 async def representative(ctx, name: str):
     with sqlite3.connect("verification_bot.db") as conn:
         cursor = conn.cursor()
@@ -146,7 +146,7 @@ async def representative(ctx, name: str):
         conn.commit()
         await ctx.respond(f"Request submitted for {name} as Representative.")
 
-@bot.slash_command(name="cgastaff")
+@bot.tree.command(name="cgastaff")
 async def cgastaff(ctx):
     with sqlite3.connect("verification_bot.db") as conn:
         cursor = conn.cursor()
@@ -159,7 +159,7 @@ async def cgastaff(ctx):
         conn.commit()
         await ctx.respond("Request submitted for CGA Staff.")
 
-@bot.slash_command(name="pressmedia")
+@bot.tree.command(name="pressmedia")
 async def pressmedia(ctx):
     with sqlite3.connect("verification_bot.db") as conn:
         cursor = conn.cursor()
