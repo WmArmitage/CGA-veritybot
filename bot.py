@@ -107,6 +107,17 @@ def update_legislators(data):
 init_db()
 fetch_legislators()
 
+#on ready event - gemini addition
+@bot.event
+async def on_ready():
+    print(f'Logged in as {bot.user} (ID: {bot.user.id})')
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(e)
+
+
 # VERIFICATION REQUEST HANDLING
 
 @bot.slash_command(name="senator")
