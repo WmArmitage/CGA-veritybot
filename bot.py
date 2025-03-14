@@ -112,7 +112,7 @@ fetch_legislators()
 
 # VERIFICATION REQUEST HANDLING
 
-@bot.slash_command(name="senator")
+@bot.tree.command(name="senator")
 async def senator(ctx, name: str):
     with sqlite3.connect("verification_bot.db") as conn:
         cursor = conn.cursor()
