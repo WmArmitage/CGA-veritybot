@@ -281,7 +281,7 @@ async def expire_requests():
 
     db.commit()
 
-#bot = commands.Bot(command_prefix="/") -duplicated code
+
 
 def fetch_legislators():
     headers = {"X-App-Token": API_TOKEN}
@@ -332,7 +332,13 @@ async def request_role(ctx, role: str, first_name: str, last_name: str):
     else:
         await ctx.send(f"Error: {full_name} is not listed as a {role}.")
 
-refresh_legislators.start()
+@bot.event
+async def on_ready():
+    """Runs when the bot is ready."""
+    print(f"Logged in as {bot.user}")
+    if not refresh_legislators.is_running():
+        refresh_legislators.start()
+
 
 # Function to check if user already has a role
 def user_has_role(discord_id):
