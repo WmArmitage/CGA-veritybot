@@ -25,7 +25,7 @@ API_KEY = os.getenv("API_KEY")  # Ensure the API key is stored securely
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="/", intents=intents) 
 
 
 # Database setup
@@ -112,7 +112,7 @@ fetch_legislators()
 
 # VERIFICATION REQUEST HANDLING
 
-@bot.tree.command(name="senator")
+@bot.slash_command(name="senator")
 async def senator(ctx, name: str):
     with sqlite3.connect("verification_bot.db") as conn:
         cursor = conn.cursor()
@@ -129,7 +129,7 @@ async def senator(ctx, name: str):
         conn.commit()
         await ctx.respond(f"Request submitted for {name} as Senator.")
 
-@bot.tree.command(name="representative")
+@bot.slash_command(name="representative")
 async def representative(ctx, name: str):
     with sqlite3.connect("verification_bot.db") as conn:
         cursor = conn.cursor()
@@ -146,7 +146,7 @@ async def representative(ctx, name: str):
         conn.commit()
         await ctx.respond(f"Request submitted for {name} as Representative.")
 
-@bot.tree.command(name="cgastaff")
+@bot.slash_command(name="cgastaff")
 async def cgastaff(ctx):
     with sqlite3.connect("verification_bot.db") as conn:
         cursor = conn.cursor()
@@ -159,7 +159,7 @@ async def cgastaff(ctx):
         conn.commit()
         await ctx.respond("Request submitted for CGA Staff.")
 
-@bot.tree.command(name="pressmedia")
+@bot.slash_command(name="pressmedia")
 async def pressmedia(ctx):
     with sqlite3.connect("verification_bot.db") as conn:
         cursor = conn.cursor()
@@ -281,7 +281,7 @@ async def expire_requests():
 
     db.commit()
 
-bot = commands.Bot(command_prefix="/")
+#bot = commands.Bot(command_prefix="/") -duplicated code
 
 def fetch_legislators():
     headers = {"X-App-Token": API_TOKEN}
